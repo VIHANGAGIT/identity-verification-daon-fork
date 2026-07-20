@@ -1,0 +1,181 @@
+{
+    "create": {
+        "image": "assets/images/logos/daon.svg",
+        "header": "Daon TrustX Authenticator",
+        "Subheading": "Add Daon TrustX identity verification and login to a flow using a Daon Identity Verifier connection.",
+        "documentation": "",
+        "modal": {
+            "form": {
+                "fields": [
+                    {
+                        "index": 0,
+                        "ariaLabel": "Daon TrustX Authenticator Connection Name",
+                        "name": "name",
+                        "label": "Name",
+                        "type": "text",
+                        "required": true,
+                        "placeholder": "Enter a name for the connection.",
+                        "initialValue": "Daon TrustX Authenticator",
+                        "data-testid": "daon-authenticator-create-wizard-page-idp-name",
+                        "maxLength": "50",
+                        "minLength": "3",
+                        "width": "13"
+                    },
+                    {
+                        "index": 1,
+                        "ariaLabel": "Daon Verifier ID",
+                        "type": "text",
+                        "name": "daon_idp_id",
+                        "label": "Daon Verifier ID",
+                        "placeholder": "Resource ID (UUID) of the Daon Identity Verifier connection.",
+                        "required": true,
+                        "data-testid": "daon-authenticator-create-wizard-page-idp-id",
+                        "maxLength": "100",
+                        "minLength": "3",
+                        "width": "13"
+                    },
+                    {
+                        "index": 2,
+                        "ariaLabel": "Daon Login Process Definition",
+                        "type": "text",
+                        "name": "daon_login_pd",
+                        "label": "Login Process Definition",
+                        "placeholder": "e.g. LoginProcess:1",
+                        "required": false,
+                        "data-testid": "daon-authenticator-create-wizard-page-login-pd",
+                        "maxLength": "100",
+                        "minLength": "1",
+                        "width": "13"
+                    }
+                ]
+            },
+            "wizardHelp": {
+                "message": {
+                    "header": "Prerequisites",
+                    "paragraphs": [
+                        "First create a <strong>Daon Identity Verifier</strong> connection (holding the OIDC client credentials, endpoints and the <strong>enrol process definition</strong>). Then copy its <strong>resource ID</strong> (the id shown in the connection details / console URL) and provide it here as the <strong>Daon Verifier ID</strong>, along with the <strong>login process definition</strong> to send as acr_values during login and password recovery."
+                    ]
+                },
+                "fields": [
+                    {
+                        "fieldName": "Name",
+                        "hint": "Provide a unique name for the connection."
+                    },
+                    {
+                        "fieldName": "Daon Verifier ID",
+                        "hint": "Resource ID (UUID) of the <Code class=\"inline-code\">Daon Identity Verifier</Code> connection whose OIDC client credentials and endpoints this authenticator uses."
+                    },
+                    {
+                        "fieldName": "Login Process Definition",
+                        "hint": "Daon process definition used for the login and password-recovery (re-verification) flows, sent as <Code class=\"inline-code\">acr_values</Code> in the format <Code class=\"inline-code\">&lt;Name:Version&gt;</Code>. Enrolment uses the enrol process definition configured on the referenced Daon Identity Verifier."
+                    }
+                ]
+            }
+        },
+        "properties": [
+            {
+                "key": "daon_idp_id",
+                "value": ""
+            },
+            {
+                "key": "daon_login_pd",
+                "value": ""
+            }
+        ]
+    },
+    "edit": {
+        "tabs": {
+            "quickStart": {
+                "heading": "Add Daon TrustX Authenticator",
+                "subHeading": "Follow the steps below to add Daon TrustX login (re-verification) to your application.",
+                "steps": [
+                    {
+                        "title": "Configure the connection",
+                        "content": "<p>Provide the <strong>Daon Verifier ID</strong> (resource ID of the Daon Identity Verifier connection) and the <strong>Login Process Definition</strong> on the <strong>Settings</strong> tab. The OIDC client credentials, endpoints and scopes are resolved from the referenced Daon Identity Verifier connection.</p>"
+                    },
+                    {
+                        "title": "Map attributes",
+                        "content": "<p>On the <strong>Attributes</strong> tab, map Daon verified claims (e.g. <Code class=\"inline-code\">given_name</Code>, <Code class=\"inline-code\">family_name</Code>, <Code class=\"inline-code\">birthdate</Code>) to WSO2 local claims. These drive verification.</p>"
+                    },
+                    {
+                        "title": "Add Daon TrustX to a login flow",
+                        "content": "<p>Add this <strong>Daon TrustX Authenticator</strong> to an application's <strong>Login Flow</strong> as a step after the user is identified, to re-verify users already enrolled with the referenced Daon Identity Verifier. Enrolment (registration / invited-user) is driven by the Daon Identity Verifier connection itself.</p>"
+                    }
+                ]
+            },
+            "general": [
+                {
+                    "index": 0,
+                    "displayOrder": 1,
+                    "ariaLabel": "name",
+                    "inputType": "resource_name",
+                    "type": "text",
+                    "name": "name",
+                    "label": "Name",
+                    "required": true,
+                    "message": "Connection name is required",
+                    "placeholder": "Daon TrustX Authenticator",
+                    "validation": true,
+                    "value": "",
+                    "maxLength": "50",
+                    "minLength": "3",
+                    "data-testid": "idp-edit-page-general-settings-form-idp-name",
+                    "hint": "Enter a unique name for this Daon TrustX Authenticator connection.",
+                    "readOnly": false
+                },
+                {
+                    "index": 1,
+                    "displayOrder": 2,
+                    "type": "textarea",
+                    "name": "description",
+                    "ariaLabel": "description",
+                    "label": "Description",
+                    "required": false,
+                    "placeholder": "Enter a description of the Daon TrustX Authenticator connection.",
+                    "value": "",
+                    "data-testid": "idp-edit-page-general-settings-form-idp-description",
+                    "maxLength": "300",
+                    "minLength": "3",
+                    "hint": "A text description of the Daon TrustX Authenticator connection.",
+                    "readOnly": false
+                }
+            ],
+            "settings": [
+                {
+                    "index": 0,
+                    "displayOrder": 1,
+                    "ariaLabel": "Daon Verifier ID",
+                    "inputType": "default",
+                    "name": "daon_idp_id",
+                    "label": "Daon Verifier ID",
+                    "placeholder": "Resource ID (UUID) of the Daon Identity Verifier connection.",
+                    "hint": "Resource ID (UUID) of the Daon Identity Verifier connection whose OIDC client credentials and endpoints this authenticator uses.",
+                    "required": true,
+                    "readOnly": false,
+                    "value": "",
+                    "maxLength": "100",
+                    "minLength": "3",
+                    "width": "16",
+                    "data-testid": "idp-edit-page-authenticator-settings-DaonAuthenticator-content-idp-id"
+                },
+                {
+                    "index": 1,
+                    "displayOrder": 2,
+                    "ariaLabel": "Daon login process definition",
+                    "inputType": "default",
+                    "name": "daon_login_pd",
+                    "label": "Login Process Definition",
+                    "placeholder": "e.g. LoginProcess:1",
+                    "hint": "Daon process definition used for the login and password-recovery (re-verification) flows, as <Name:Version>, sent as acr_values. Enrolment uses the enrol process definition on the referenced Daon Identity Verifier.",
+                    "required": false,
+                    "readOnly": false,
+                    "value": "",
+                    "maxLength": "100",
+                    "minLength": "1",
+                    "width": "16",
+                    "data-testid": "idp-edit-page-authenticator-settings-DaonAuthenticator-content-login-pd"
+                }
+            ]
+        }
+    }
+}

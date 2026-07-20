@@ -1,0 +1,62 @@
+{
+    "id": "daon-authenticator",
+    "name": "Daon TrustX Authenticator",
+    "description": "Add Daon TrustX login (re-verification) to a flow, using a Daon Identity Verifier connection and a login process definition.",
+    "image": "assets/images/logos/daon.svg",
+    "category": "DEFAULT",
+    "displayOrder": 16,
+    "services": [],
+    "tags": [ "OIDC" ],
+    "idp": {
+        "name": "Daon TrustX Authenticator",
+        "description": "",
+        "image": "",
+        "isPrimary": false,
+        "isFederationHub": false,
+        "homeRealmIdentifier": "",
+        "certificate": {
+            "certificates": []
+        },
+        "alias": "",
+        "idpIssuerName": "",
+        "federatedAuthenticators": {
+            "defaultAuthenticatorId": "RGFvbkF1dGhlbnRpY2F0b3I",
+            "authenticators": [
+                {
+                    "authenticatorId": "RGFvbkF1dGhlbnRpY2F0b3I",
+                    "isEnabled": true,
+                    "properties": [
+                        {
+                            "key": "daon_idp_id",
+                            "displayName": "Daon Verifier ID",
+                            "description": "Resource ID (UUID) of the Daon Identity Verifier connection whose OIDC client credentials and endpoints this authenticator uses.",
+                            "type": "STRING",
+                            "displayOrder": 1,
+                            "regex": ".*",
+                            "isMandatory": true,
+                            "isConfidential": false,
+                            "options": [],
+                            "defaultValue": "",
+                            "subProperties": []
+                        },
+                        {
+                            "key": "daon_login_pd",
+                            "displayName": "Login Process Definition",
+                            "description": "Daon process definition used for the login and password-recovery (re-verification) flows, as <ProcessDefinitionName:Version>. Sent as acr_values. Enrolment flows use the enrol process definition configured on the referenced Daon Identity Verifier.",
+                            "type": "STRING",
+                            "displayOrder": 2,
+                            "regex": ".*",
+                            "isMandatory": false,
+                            "isConfidential": false,
+                            "options": [],
+                            "defaultValue": "",
+                            "subProperties": []
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "type": "SOCIAL",
+    "templateId": "daon-authenticator"
+}
