@@ -48,6 +48,23 @@ public class DaonAuthenticatorConstants {
     public static final String OAUTH2_ERROR_DESCRIPTION = "error_description";
 
     /**
+     * Stable error code surfaced to the authentication retry page when a user who is not enrolled with
+     * Daon reaches the Daon login step. The framework drops an {@code AuthenticationFailedException}'s
+     * error code before it reaches the portal, so the login authenticator redirects to the retry page
+     * with this code as the {@code errorCode} query param, which the portal switches on to show a
+     * dedicated "not enrolled" message.
+     */
+    public static final String USER_NOT_ENROLLED_ERROR_CODE = "DAON-60001";
+
+    /**
+     * i18n keys passed to the authentication retry page (as status / status message) when a not-enrolled
+     * user reaches the Daon login step. The retry page resolves these from its resource bundle, so the
+     * displayed text stays localizable and no raw sentence is hard-coded in the authenticator.
+     */
+    public static final String NOT_ENROLLED_RETRY_STATUS = "daon.user.not.enrolled.message";
+    public static final String NOT_ENROLLED_RETRY_STATUS_MSG = "daon.user.not.enrolled.description";
+
+    /**
      * Authenticator configuration property key for the Daon <b>login</b> process definition (PD),
      * configured on the Daon TrustX Authenticator connection. It drives the login (re-verification)
      * flow and the password-recovery flow, and is sent to Daon as {@code acr_values} in the format
@@ -137,17 +154,4 @@ public class DaonAuthenticatorConstants {
      */
     public static final String DAON_FED_IDP_NAME = "daon_fed_idp_name";
     public static final String DAON_FED_SUBJECT = "daon_fed_subject";
-
-    // IS identity claim used to lock a user account.
-    public static final String ACCOUNT_LOCKED_CLAIM = "http://wso2.org/claims/identity/accountLocked";
-
-    // Invited-user verification outcome + retry counting (flow-context property keys).
-    public static final String DAON_VERIFICATION_OUTCOME = "daon_verification_outcome";
-    public static final String DAON_VERIFICATION_ATTEMPTS = "daon_verification_attempts";
-    public static final String OUTCOME_RETRY = "RETRY";
-    public static final String OUTCOME_LOCKED = "LOCKED";
-
-    // Number of failed Daon verification attempts (within an invited-user session) before the account
-    // is locked. Failures below this threshold re-prompt the Daon step; at/above it the account is locked.
-    public static final int MAX_VERIFICATION_ATTEMPTS = 3;
 }
