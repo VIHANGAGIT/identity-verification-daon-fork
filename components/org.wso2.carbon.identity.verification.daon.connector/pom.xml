@@ -22,7 +22,7 @@
     <parent>
         <groupId>org.wso2.carbon.identity.verification</groupId>
         <artifactId>org.wso2.carbon.identity.verification.daon</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -121,6 +121,44 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.apache.maven.surefire</groupId>
+                        <artifactId>surefire-testng</artifactId>
+                        <version>${maven.surefire.plugin.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                    <!--
+                    The identity framework drags in two incompatible pax-logging-api builds, whose JCL
+                    facade and PaxLogger interface then come from different versions - any code under test
+                    that logs dies with a NoSuchMethodError. In the server pax-logging is supplied by the
+                    OSGi runtime, so drop it from the test classpath and let commons-logging serve
+                    LogFactory on its own.
+                    -->
+                    <classpathDependencyExcludes>
+                        <classpathDependencyExclude>
+                            org.ops4j.pax.logging:pax-logging-api
+                        </classpathDependencyExclude>
+                        <classpathDependencyExclude>
+                            org.ops4j.pax.logging:pax-logging-log4j2
+                        </classpathDependencyExclude>
+                        <classpathDependencyExclude>
+                            org.wso2.org.ops4j.pax.logging:pax-logging-api
+                        </classpathDependencyExclude>
+                        <classpathDependencyExclude>
+                            org.wso2.org.ops4j.pax.logging:pax-logging-log4j2
+                        </classpathDependencyExclude>
+                    </classpathDependencyExcludes>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
                 <extensions>true</extensions>
@@ -132,7 +170,8 @@
                         <_dsannotations-options>version;minimum=1.2.0;maximum=1.2.0,nocapabilities,norequirements</_dsannotations-options>
                         <_removeheaders>Require-Capability</_removeheaders>
                         <Private-Package>
-                            org.wso2.carbon.identity.verification.daon.connector.internal
+                            org.wso2.carbon.identity.verification.daon.connector.internal,
+                            org.wso2.carbon.identity.verification.daon.connector.util
                         </Private-Package>
                         <Import-Package>
                             org.apache.commons.lang; version="${commons-lang.wso2.osgi.version.range}",
@@ -149,9 +188,14 @@
                             version="${carbon.identity.application.authenticator.oidc.imp.pkg.version.range}",
                             org.wso2.carbon.identity.application.common.*;
                             version="${carbon.identity.package.import.version.range}",
+                            org.wso2.carbon.identity.application.common.util;
+                            version="${carbon.identity.package.import.version.range}",
                             org.wso2.carbon.identity.base; version="${carbon.identity.package.import.version.range}",
                             org.wso2.carbon.identity.core.util; version="${carbon.identity.package.import.version.range}",
+                            org.wso2.carbon.identity.flow.execution.engine,
                             org.wso2.carbon.identity.flow.execution.engine.*,
+                            org.wso2.carbon.identity.flow.mgt;
+                            version="${carbon.identity.package.import.version.range}",
                             org.wso2.carbon.identity.organization.management.service;
                             version="${identity.organization.management.imp.pkg.version.range}",
                             org.wso2.carbon.identity.organization.management.service.util;
@@ -170,6 +214,7 @@
                         </Import-Package>
                         <Export-Package>
                             !org.wso2.carbon.identity.verification.daon.connector.internal,
+                            !org.wso2.carbon.identity.verification.daon.connector.util,
                             org.wso2.carbon.identity.verification.daon.connector.*; version="${project.version}"
                         </Export-Package>
                     </instructions>

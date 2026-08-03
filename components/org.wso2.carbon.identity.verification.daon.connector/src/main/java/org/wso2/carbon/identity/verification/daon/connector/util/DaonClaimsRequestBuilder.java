@@ -16,9 +16,13 @@
  * under the License.
  */
 
-package org.wso2.carbon.identity.verification.daon.connector;
+package org.wso2.carbon.identity.verification.daon.connector.util;
 
+import org.json.JSONException;
 import org.json.JSONObject;
+import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
+import org.wso2.carbon.identity.verification.daon.connector.exception.DaonExceptionMgt;
+import org.wso2.carbon.identity.verification.daon.connector.exception.DaonServerException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIMS_PARAM;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_BIRTHDATE;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_DOCUMENT_CLASSIFICATION;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_DOCUMENT_DATE_OF_EXPIRY;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_DOCUMENT_NUMBER;
@@ -49,7 +54,7 @@ import static org.wso2.carbon.identity.verification.daon.connector.constants.Dao
  * (client id, endpoints, scope, state, nonce, redirect URI) is built by the OIDC authenticator/executor
  * this connector extends. The parameter is passed to Daon as an additional query parameter.</p>
  */
-final class DaonClaimsRequestBuilder {
+public final class DaonClaimsRequestBuilder {
 
     /**
      * Document claims always requested alongside the mapped claims, so the verified document details are
@@ -63,7 +68,47 @@ final class DaonClaimsRequestBuilder {
             CLAIM_DOCUMENT_PERSONAL_NUMBER
     );
 
+    /**
+     * The claim values that are actually checkable against an identity document, and so are the only ones
+     * whose value-request gives an invited-user flow its "validate the pre-populated profile" guarantee.
+     *
+     * <p>An attribute like an email address or a phone number does not appear on a passport or driving
+     * licence, so sending it as a value-request verifies nothing: Daon has no document field to compare it
+     * with. A flow whose value-requests are all of that kind would report success while proving only that
+     * <em>some</em> valid document was presented.</p>
+     */
+    private static final List<String> DOCUMENT_VERIFIABLE_CLAIMS = Arrays.asList(
+            CLAIM_GIVEN_NAME,
+            CLAIM_FAMILY_NAME,
+            CLAIM_FAMILY_NAME_AND_GIVEN_NAME,
+            CLAIM_BIRTHDATE,
+            CLAIM_DOCUMENT_NUMBER,
+            CLAIM_DOCUMENT_PERSONAL_NUMBER
+    );
+
     private DaonClaimsRequestBuilder() {
+    }
+
+    /**
+     * Whether the pre-known claim values contain at least one attribute Daon can validate against the
+     * identity document, i.e. whether a value-request built from them actually proves anything about the
+     * person presenting the document.
+     *
+     * @param claimValues pre-known values keyed by Daon claim name; may be {@code null} or empty.
+     * @see #DOCUMENT_VERIFIABLE_CLAIMS
+     */
+    public static boolean hasDocumentVerifiableValue(Map<String, String> claimValues) {
+
+        if (claimValues == null || claimValues.isEmpty()) {
+            return false;
+        }
+        for (String claimName : DOCUMENT_VERIFIABLE_CLAIMS) {
+            String value = claimValues.get(claimName);
+            if (value != null && !value.trim().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -92,10 +137,12 @@ final class DaonClaimsRequestBuilder {
      * @param daonClaimNames Daon claim names to request.
      * @param claimValues    Pre-known values keyed by Daon claim name; may be empty.
      */
-    static String buildClaimsParam(List<String> daonClaimNames, Map<String, String> claimValues) {
+    public static String buildClaimsParam(List<String> daonClaimNames, Map<String, String> claimValues)
+            throws DaonServerException {
 
         Map<String, String> values = claimValues != null ? claimValues : Collections.emptyMap();
-        List<String> effectiveNames = new ArrayList<>(daonClaimNames);
+        List<String> effectiveNames =
+                new ArrayList<>(daonClaimNames != null ? daonClaimNames : Collections.emptyList());
         if ((effectiveNames.contains(CLAIM_GIVEN_NAME) || effectiveNames.contains(CLAIM_FAMILY_NAME))
                 && !effectiveNames.contains(CLAIM_FAMILY_NAME_AND_GIVEN_NAME)) {
             effectiveNames.add(CLAIM_FAMILY_NAME_AND_GIVEN_NAME);
@@ -106,20 +153,26 @@ final class DaonClaimsRequestBuilder {
             }
         }
 
-        JSONObject claimsObj = new JSONObject();
-        for (String claimName : effectiveNames) {
-            String value = values.get(claimName);
-            if (value != null && !value.trim().isEmpty()) {
-                claimsObj.put(claimName, new JSONObject().put(CLAIM_VALUE_MEMBER, value));
-            } else {
-                claimsObj.put(claimName, JSONObject.NULL);
+        try {
+            JSONObject claimsObj = new JSONObject();
+            for (String claimName : effectiveNames) {
+                String value = values.get(claimName);
+                if (value != null && !value.trim().isEmpty()) {
+                    claimsObj.put(claimName, new JSONObject().put(CLAIM_VALUE_MEMBER, value));
+                } else {
+                    claimsObj.put(claimName, JSONObject.NULL);
+                }
             }
+            JSONObject verification = new JSONObject().put(TRUST_FRAMEWORK, TRUST_FRAMEWORK_VALUE);
+            JSONObject verifiedClaims = new JSONObject()
+                    .put(VERIFICATION, verification)
+                    .put(CLAIMS_PARAM, claimsObj);
+            JSONObject idToken = new JSONObject().put(VERIFIED_CLAIMS, verifiedClaims);
+            return new JSONObject().put(ID_TOKEN_CONTAINER, idToken).toString();
+        } catch (JSONException e) {
+            // JSONObject.put throws unchecked on a null key or a non-finite number; surface it as a coded
+            // Daon failure rather than letting it cross the executor boundary untyped.
+            throw DaonExceptionMgt.handleServerException(ErrorMessage.ERROR_BUILDING_CLAIMS_REQUEST, e);
         }
-        JSONObject verification = new JSONObject().put(TRUST_FRAMEWORK, TRUST_FRAMEWORK_VALUE);
-        JSONObject verifiedClaims = new JSONObject()
-                .put(VERIFICATION, verification)
-                .put(CLAIMS_PARAM, claimsObj);
-        JSONObject idToken = new JSONObject().put(VERIFIED_CLAIMS, verifiedClaims);
-        return new JSONObject().put(ID_TOKEN_CONTAINER, idToken).toString();
     }
 }
