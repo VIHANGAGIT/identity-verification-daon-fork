@@ -31,9 +31,8 @@ import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.expectThrows;
 
 /**
- * Tests the extraction of Daon's verified claims from an ID token payload — in particular that a token
- * carrying no verification result fails the flow instead of passing as a successful verification — and the
- * matching of the identity the token carries against the subject a flow expects.
+ * Tests extraction of Daon's verified claims — in particular that a token carrying no verification result
+ * fails — and the matching of the token's identity against the subject a flow expects.
  */
 public class DaonJwtUtilTest {
 
@@ -164,10 +163,8 @@ public class DaonJwtUtilTest {
     }
 
     /**
-     * The following cover the binding of the identity Daon verified to the account being verified. This is
-     * the check that stops a user who verifies their own enrolled Daon identity from satisfying the
-     * verification step for somebody else's account, so the fail-closed cases matter as much as the
-     * matching ones.
+     * The binding check that stops a user who verifies their own Daon identity from satisfying the step for
+     * somebody else's account, so the fail-closed cases matter as much as the matching ones.
      */
     @DataProvider(name = "matchingIdentities")
     public Object[][] matchingIdentities() {

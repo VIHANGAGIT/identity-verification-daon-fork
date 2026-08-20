@@ -39,12 +39,8 @@ import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 
 /**
- * Tests the dereferencing of {@code daon_idp_id}.
- *
- * <p>The subject of most of these is the guard that a reference is only honoured when it names a Daon
- * connection. The reference decides which OIDC client credentials and endpoints a Daon request is built
- * from, so a reference that resolved to any connection in the tenant would let one be configured to run
- * what the flows treat as a Daon identity verification against an unrelated provider.</p>
+ * Tests the dereferencing of {@code daon_idp_id}, mostly the guard that a reference is only honoured when it
+ * names a Daon connection — it decides which OIDC credentials and endpoints a request is built from.
  */
 public class DaonReferencedIdpUtilTest {
 

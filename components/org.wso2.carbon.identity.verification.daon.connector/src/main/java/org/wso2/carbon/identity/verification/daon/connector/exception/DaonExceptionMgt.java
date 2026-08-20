@@ -25,39 +25,14 @@ import org.wso2.carbon.identity.flow.execution.engine.exception.FlowEngineServer
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
 
 /**
- * Builds exceptions and log messages from the {@link ErrorMessage} catalogue, so every failure the Daon
- * connector reports carries its {@code DAON-} error code.
- *
- * <p>The connector spans three exception families and this class bridges all of them from the one
- * catalogue:</p>
- * <ul>
- *   <li><b>Flow path</b> (registration, invited user, password recovery) — {@code FlowEngine*Exception}.
- *       These must be built here rather than through
- *       {@code OpenIDConnectExecutor.handleFlowEngineServerException}, which discards the caller's code and
- *       stamps the flow engine's own generic {@code 65013} instead.</li>
- *   <li><b>Login path</b> — {@link AuthenticationFailedException}. The framework drops the error code
- *       before it reaches the portal, so there the code is a diagnostic aid in the server log; the
- *       user-facing channel is the login retry page.</li>
- *   <li><b>Internal</b> — {@link DaonServerException}, raised by the utility classes and re-wrapped for
- *       whichever path called them (see {@link #toFlowServerException}). There is deliberately no client
- *       counterpart: every internal failure the connector raises is a server-side one, and the client
- *       errors it reports are all built directly as flow-engine or authentication-framework
- *       exceptions.</li>
- * </ul>
- *
- * <p>For failures that are deliberately swallowed (the connector degrades rather than failing the flow),
- * use {@link #errorLog(ErrorMessage, Object...)} to keep the code in the log line without changing
- * control flow.</p>
+ * Builds exceptions and log lines from the {@link ErrorMessage} catalogue, bridging it to the flow-engine,
+ * authentication-framework and internal exception families.
  */
-public class DaonExceptionMgt {
+public final class DaonExceptionMgt {
 
     private DaonExceptionMgt() {
     }
 
-    /**
-     * Formats an error's description with the caller's arguments, leaving it untouched when there are
-     * none, so an unfilled {@code %s} template never reaches a log or a client.
-     */
     private static String describe(ErrorMessage error, Object... data) {
 
         if (ArrayUtils.isNotEmpty(data)) {
@@ -67,8 +42,9 @@ public class DaonExceptionMgt {
     }
 
     /**
-     * Renders an error as a log line, e.g. {@code "DAON-65008 - Error resolving the referenced Daon IDP
-     * for resource id: abc"}. For sites that log and continue rather than throwing.
+     * Renders an error as a log line, for sites that log and continue rather than throwing.
+     *
+     * @return e.g. {@code "DAON-65008 - Error resolving the referenced Daon IDP for resource id: abc"}.
      */
     public static String errorLog(ErrorMessage error, Object... data) {
 
@@ -91,13 +67,7 @@ public class DaonExceptionMgt {
     // Flow execution engine exceptions.
 
     /**
-     * Builds a client exception carrying the {@code {{ }}} i18n tokens the flow portal renders, so the
-     * wording the end user sees is resolved and localized by the portal rather than shipped from here.
-     * An error with no i18n key falls back to its catalogue message, which the portal leaves unrendered in
-     * favour of its own flow-type wording.
-     *
-     * <p>The diagnostic description is deliberately not sent — it can name internal configuration. Log it
-     * at the call site with {@link #errorLog(ErrorMessage, Object...)} where the detail is needed.</p>
+     * Builds a client exception carrying the i18n tokens the flow portal renders.
      */
     public static FlowEngineClientException handleFlowClientException(ErrorMessage error) {
 
@@ -105,7 +75,7 @@ public class DaonExceptionMgt {
     }
 
     /**
-     * The heading the flow portal should render for an error, as the token that marks it user-facing.
+     * The heading the flow portal should render for an error.
      */
     public static String userMessage(ErrorMessage error) {
 
@@ -113,7 +83,7 @@ public class DaonExceptionMgt {
     }
 
     /**
-     * The body the flow portal should render for an error, as the token that marks it user-facing.
+     * The body the flow portal should render for an error.
      */
     public static String userDescription(ErrorMessage error) {
 
@@ -127,19 +97,13 @@ public class DaonExceptionMgt {
     }
 
     /**
-     * Re-wraps an internal Daon exception as a flow engine exception, preserving the original error code
-     * and message so the code raised at the point of failure is the one the flow reports.
+     * Preserves the original error code.
      */
     public static FlowEngineServerException toFlowServerException(DaonException e) {
 
         return new FlowEngineServerException(e.getErrorCode(), e.getMessage(), e.getMessage(), e);
     }
 
-    // Authentication framework exceptions.
-
-    /**
-     * Builds an {@link AuthenticationFailedException} carrying the error code and the user-facing message.
-     */
     public static AuthenticationFailedException handleAuthFailedException(ErrorMessage error) {
 
         return new AuthenticationFailedException(error.getCode(), error.getMessage());

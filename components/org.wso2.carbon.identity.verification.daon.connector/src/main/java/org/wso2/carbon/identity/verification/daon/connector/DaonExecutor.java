@@ -37,7 +37,6 @@ import org.wso2.carbon.identity.flow.execution.engine.metadata.FlowExecutorMetad
 import org.wso2.carbon.identity.flow.execution.engine.model.ExecutorResponse;
 import org.wso2.carbon.identity.flow.execution.engine.model.FlowExecutionContext;
 import org.wso2.carbon.identity.flow.execution.engine.model.FlowUser;
-import org.wso2.carbon.identity.flow.mgt.Constants.ExecutorBehaviorFlags;
 import org.wso2.carbon.identity.flow.mgt.Constants.FlowTypes;
 import org.wso2.carbon.identity.organization.management.service.OrganizationManager;
 import org.wso2.carbon.identity.organization.management.service.util.OrganizationManagementUtil;
@@ -53,6 +52,7 @@ import org.wso2.carbon.identity.verification.daon.connector.util.DaonFederatedAs
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonJwtUtil;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonReferencedIdpUtil;
 import org.wso2.carbon.user.api.UserStoreException;
+import org.wso2.carbon.user.api.UserStoreManager;
 import org.wso2.carbon.user.core.UniqueIDUserStoreManager;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
@@ -63,6 +63,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ACR_VALUES_PARAM;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIMS_PARAM;
@@ -83,47 +84,37 @@ import static org.wso2.carbon.identity.verification.daon.connector.constants.Dao
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.WSO2_LASTNAME_CLAIM_URI;
 
 /**
- * Flow executor for the Daon TrustX identity provider (IDP).
- *
- * <p>Drives the OIDC authorization-code flow against Daon for the registration, invited-user, and
- * password-recovery flows. Daon is a standard federated OIDC connection, so client credentials,
- * endpoints and scope resolve natively from the connection's authenticator config; claim mappings
- * come from the IDP claim configuration.</p>
- *
- * <p>The returned ID token carries a nested {@code verifiedClaims.claims} object with the verified
- * identity attributes. For self-registration these provision the new user's profile; for invited
- * users they are validated against the pre-populated profile. On success a federated association
- * (local user &lt;-&gt; Daon {@code preferred_username}) is recorded via
- * {@link DaonFederatedAssociationListener}; its presence marks the user as Daon-verified and supplies
- * the {@code login_hint} for later face-auth. No custom user claims are used.</p>
+ * Flow executor for Daon TrustX, driving the OIDC authorization-code flow for all the flows.
  */
 public class DaonExecutor extends OpenIDConnectExecutor {
 
     private static final Log LOG = LogFactory.getLog(DaonExecutor.class);
     private static final String DAON_EXECUTOR_NAME = "DaonExecutor";
 
+    private static final String PORTAL_PATH_PREFIX = "/accounts/";
+    private static final String PORTAL_PATH_RECOVERY = "recovery";
+    private static final String PORTAL_PATH_REGISTER = "register";
+    private static final String ORGANIZATION_PATH_PREFIX = "/o/";
+    private static final String TENANT_PATH_PREFIX = "/t/";
+
     @Override
     public String getName() {
+
         return DAON_EXECUTOR_NAME;
     }
 
     @Override
     public String getAMRValue() {
-        return DAON_EXECUTOR_NAME;
+
+        return DaonConstants.AUTHENTICATOR_NAME;
     }
 
-    /**
-     * Declares the flows this executor can be used in.
-     */
     @Override
     public Set<FlowTypes> getSupportedFlowTypes() {
 
         return EnumSet.allOf(FlowTypes.class);
     }
 
-    /**
-     * Describes how the flow composer should present this step.
-     */
     @Override
     public FlowExecutorMetadata getExecutorMetadata() {
 
@@ -131,7 +122,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                 .displayName(DaonConstants.AUTHENTICATOR_FRIENDLY_NAME + " Verification")
                 .description("Verify user identity with Daon TrustX.")
                 .icon("assets/images/icons/daon.svg")
-                .behaviorFlags(Collections.singletonList(ExecutorBehaviorFlags.RECOVERY_FACTOR))
                 .associatedAuthenticator(DaonConstants.AUTHENTICATOR_NAME)
                 .connectionRequired(true)
                 .build();
@@ -140,10 +130,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     @Override
     public ExecutorResponse execute(FlowExecutionContext flowExecutionContext) {
 
-        // Daon can return a standard OAuth2 error on the callback (e.g. the user cancelled/declined, or a
-        // Daon-side failure) in place of a code. Detect it generically and fail with a user-facing message;
-        // otherwise OpenIDConnectExecutor.isInitialRequest treats the missing code as an initial request and
-        // re-redirects to Daon in a loop. Log the raw values so Daon-specific codes can be mapped later.
         Map<String, String> userInputs = flowExecutionContext.getUserInputData();
         if (userInputs != null
                 && StringUtils.isNotBlank(userInputs.get(OIDCAuthenticatorConstants.OAUTH2_ERROR))) {
@@ -162,8 +148,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         try {
             prepareRequest(flowExecutionContext);
         } catch (FlowEngineException e) {
-            // The request cannot be built in a form that actually verifies the user (see prepareRequest),
-            // so fail instead of sending Daon a request that would report success regardless.
+            // The request cannot be built in a form that actually verifies the user.
             LOG.error(e.getErrorCode() + " - " + e.getDescription(), e);
             ExecutorResponse errorResponse = new ExecutorResponse();
             errorResponse.setResult(Constants.ExecutorStatus.STATUS_ERROR);
@@ -172,34 +157,17 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             errorResponse.setErrorDescription(e.getDescription());
             return errorResponse;
         }
-        // Password recovery re-verifies an already-Daon-enrolled user via login_hint. Without a Daon
-        // association there is no login_hint to send, so fail cleanly instead of attempting enrolment.
         if (FLOW_TYPE_PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType())
                 && StringUtils.isBlank(flowExecutionContext.getAuthenticatorProperties().get(DAON_LOGIN_HINT))) {
-            LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_USER_NOT_ENROLLED,
-                    flowExecutionContext.getFlowType()));
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_USER_NOT_ENROLLED,
+                        flowExecutionContext.getFlowType()));
+            }
             return userError(ErrorMessage.ERROR_USER_NOT_ENROLLED);
         }
         return super.execute(flowExecutionContext);
     }
 
-    /**
-     * Ends the flow with a failure the end user is meant to see.
-     *
-     * <p>The flow engine copies the code, message and description straight off the {@link ExecutorResponse}
-     * into the client error response, so this is the channel that carries the {@code DAON-} code to the
-     * portal. The message and description are the error's {@code {{ }}} i18n tokens: the portal renders an
-     * executor's wording only when it arrives wrapped that way, and otherwise keeps its own localized
-     * flow-type wording — which is what the errors with no key (the administrator-facing ones) want.</p>
-     *
-     * <p>The diagnostic description is not sent; log it separately where the detail is needed.</p>
-     *
-     * <p>{@code setErrorMessage} is deprecated in favour of {@code addMessage}, but that is not an option
-     * here: {@code TaskExecutionNode} carries an executor's messages only on {@code STATUS_RETRY}, and
-     * discards them on {@code STATUS_USER_ERROR}. {@code STATUS_RETRY} in turn re-renders the current
-     * node's page, which a Daon execution step does not have — the flow engine dereferences the missing
-     * page mapping. Until that gap closes, the error object is the only channel out.</p>
-     */
     private ExecutorResponse userError(ErrorMessage error) {
 
         ExecutorResponse response = new ExecutorResponse();
@@ -210,55 +178,25 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         return response;
     }
 
-    /**
-     * Enriches the authenticator properties before the parent builds the authorize request:
-     * the OIDC {@code claims} request (from the IDP claim mappings), the selected process definition
-     * ({@code acr_values}), and — for password recovery — the {@code login_hint}. Client credentials,
-     * endpoints, scope and callback are resolved natively by {@link OpenIDConnectExecutor}.
-     *
-     * <p>The {@code claims} parameter is built here, rather than in {@link #getAdditionalQueryParams}
-     * whose signature cannot report a failure, so that a request which cannot be built to actually verify
-     * the user fails the flow. Dropping the value-requests would leave Daon validating the presented
-     * document against nothing while still returning success.</p>
-     *
-     * @throws FlowEngineException if the {@code claims} request cannot be built, or if an invited-user
-     *                            flow has no document-verifiable attribute to validate the profile with.
-     */
     private void prepareRequest(FlowExecutionContext flowExecutionContext) throws FlowEngineException {
 
         Map<String, String> props = flowExecutionContext.getAuthenticatorProperties();
-        // A referencing login connection sets daon_idp_id and its OIDC credentials/endpoints live on the
-        // referenced Daon Identity Verifier connection; resolve and inject them so the parent
-        // OpenIDConnectExecutor builds the request against the Daon endpoints. A self-contained Identity
-        // Verification connection already carries these on its own props, so injection is a no-op.
+        // Inject OIDC props to the referencing connection's effective properties.
         Map<String, String> enriched =
                 DaonReferencedIdpUtil.buildEffectiveProperties(props, flowExecutionContext.getTenantDomain());
 
         boolean recovery = FLOW_TYPE_PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType());
         Map<String, String> claimMappings = getIdpClaimMappings(flowExecutionContext);
-        // Recovery re-verifies by face against a login_hint and requests no claims, so this applies to the
-        // enrolment flows only.
         if (!recovery) {
-            // Any mapped attribute the user already has (registration form input, invited user's
-            // existing profile) is sent to Daon as a value-request so it verifies against that value
-            // instead of returning it unverified.
             Map<String, String> prefilledValues = claimMappings.isEmpty()
                     ? Collections.emptyMap()
                     : resolvePrefilledClaimValues(flowExecutionContext, claimMappings);
-            // Checked even when nothing is mapped: a connection with no claim mappings at all is the most
-            // complete version of having nothing for Daon to validate the invited profile against.
             assertProfileCanBeValidated(flowExecutionContext, prefilledValues);
             if (!claimMappings.isEmpty()) {
                 enriched.put(DAON_CLAIMS_REQUEST, buildClaimsRequest(claimMappings, prefilledValues));
             }
         }
-        // The enrolment flows (registration, invited-user) send the enrol process definition; password
-        // recovery sends the login one (re-verification). Both are read from the *effective* properties,
-        // not the connection's own: the enrol PD is configured on the Daon Identity Verifier connection, so
-        // for a referencing connection it only exists on `enriched` (buildEffectiveProperties layers it in
-        // from the referenced IDP). Reading it from `props` would silently drop acr_values there and let
-        // Daon run its default process definition. The login PD belongs to the login connection and is
-        // deliberately not a referenced key, so for it the two maps hold the same value.
+        // Reading enrol PD from `props` would drop acr_values and let Daon run its default PD.
         String processDefinition = recovery ? enriched.get(DAON_LOGIN_PD) : enriched.get(DAON_ENROL_PD);
         if (StringUtils.isNotBlank(processDefinition)) {
             enriched.put(DAON_SELECTED_PD, processDefinition);
@@ -273,12 +211,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         flowExecutionContext.setAuthenticatorProperties(enriched);
     }
 
-    /**
-     * Builds the OIDC {@code claims} request parameter for the enrolment flows.
-     *
-     * @throws FlowEngineException {@code DAON-65017} if it cannot be built — the flow must not continue
-     *                             with the value-requests silently dropped.
-     */
     private String buildClaimsRequest(Map<String, String> claimMappings, Map<String, String> prefilledValues)
             throws FlowEngineException {
 
@@ -291,19 +223,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         }
     }
 
-    /**
-     * Guards the invited-user flow's core guarantee: that Daon validates the pre-populated profile against
-     * the identity document, locking the account on a mismatch.
-     *
-     * <p>That guarantee rests entirely on the claim value-requests, because the connector deliberately does
-     * no client-side re-validation of the returned claims (Daon reports a mismatch on the callback
-     * instead). If none of the invited user's known attributes is document-verifiable — because the profile
-     * is empty, because reading it failed, or because only attributes like email are mapped — then Daon has
-     * nothing to compare and the flow would report success for any valid document. Fail instead.</p>
-     *
-     * <p>Self-registration is exempt: there Daon is the source of truth and provisions the profile from the
-     * verified claims, so there is no pre-existing profile to validate against.</p>
-     */
     private void assertProfileCanBeValidated(FlowExecutionContext flowExecutionContext,
                                              Map<String, String> prefilledValues) throws FlowEngineException {
 
@@ -323,19 +242,15 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     public Map<String, String> getAdditionalQueryParams(Map<String, String> authenticatorProperties) {
 
         Map<String, String> params = new HashMap<>();
-        // Process definition (as acr_values) applies to every flow that reaches Daon.
         String processDefinition = authenticatorProperties.get(DAON_SELECTED_PD);
         if (StringUtils.isNotBlank(processDefinition)) {
             params.put(ACR_VALUES_PARAM, processDefinition);
         }
         String loginHint = authenticatorProperties.get(DAON_LOGIN_HINT);
         if (StringUtils.isNotBlank(loginHint)) {
-            // Password recovery flow: face auth with login_hint, no verified_claims needed.
             params.put(LOGIN_HINT, loginHint);
             return params;
         }
-        // Registration / invited user flow: request verified_claims from Daon. Built and validated in
-        // prepareRequest, which has already failed the flow if it could not be produced.
         String claimsRequest = authenticatorProperties.get(DAON_CLAIMS_REQUEST);
         if (StringUtils.isNotBlank(claimsRequest)) {
             params.put(CLAIMS_PARAM, claimsRequest);
@@ -364,13 +279,9 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         JSONObject daonClaims;
         try {
             idTokenPayload = DaonJwtUtil.decodeJwtPayload(idToken);
-            // Fails the flow when the token carries no verification result: an enrolment step that
-            // completes without one would mark the user verified on the strength of nothing.
             daonClaims = DaonJwtUtil.extractVerifiedClaims(idTokenPayload,
                     flowExecutionContext.getFlowType());
         } catch (DaonException e) {
-            // The flow engine's generic handling reports the failure without this code, so log it here:
-            // for an integrity failure on the verification result the code is what points at the cause.
             LOG.error(e.getErrorCode() + " - " + e.getMessage(), e);
             throw DaonExceptionMgt.toFlowServerException(e);
         }
@@ -385,11 +296,9 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         Map<String, String> claimMappings = getIdpClaimMappings(flowExecutionContext);
         Map<String, String> reverseClaimMap = new HashMap<>();
         for (Map.Entry<String, String> entry : claimMappings.entrySet()) {
-            reverseClaimMap.put(entry.getValue(), entry.getKey()); // Daon name -> WSO2 URI
+            reverseClaimMap.put(entry.getValue(), entry.getKey());
         }
 
-        // Only the claims the connection maps: an unmapped Daon claim has no local claim to be written to,
-        // and nothing downstream consumes one.
         Map<String, String> extractedClaims = new HashMap<>();
         for (String key : daonClaims.keySet()) {
             String claimUri = reverseClaimMap.get(key);
@@ -404,27 +313,12 @@ public class DaonExecutor extends OpenIDConnectExecutor {
 
         String preferredUsername = idTokenPayload.optString(DaonConstants.JWT_PREFERRED_USERNAME_CLAIM, null);
 
-        // Verification of the user's details against the identity document is performed by Daon itself: the
-        // invited user's (and self-registrant's) already-known claims are sent to Daon as OIDC claim
-        // value-requests, and Daon returns a CLAIMS_VERIFICATION_MISMATCH error on the callback if they do
-        // not match (surfaced as a user-facing error in execute()). A successful callback (a code) means
-        // Daon accepted the details, so no client-side re-validation is done here.
-
-        // Self-registration: Daon is the source of truth, so provision the new user's profile.
+        // Self-registration: Daon is the source of truth, so provision the profile. The invited user's
+        // admin-defined profile is authoritative and is left untouched.
         if (FLOW_TYPE_REGISTRATION.equals(flowExecutionContext.getFlowType())) {
             userAttributes.putAll(buildProfileClaims(daonClaims, extractedClaims, reverseClaimMap));
         }
 
-        // Record the Daon verification as a federated association (local user <-> Daon subject),
-        // persisted by DaonFederatedAssociationListener once the user exists. No custom user claims.
-        // The association is keyed on the Daon IDP name — the self-contained Identity Verifier
-        // connection's own name for enrolment — so it is shared with every login connection referencing
-        // it (which resolve the same name via daon_idp_id).
-        //
-        // Every flow reaching here is an enrolment (password recovery returned above), and the association
-        // is the only record of it. Fail rather than let the flow complete without one: the registration
-        // would report success and the user would be told they are not enrolled at their first login,
-        // with no way back to an enrolment.
         if (StringUtils.isBlank(preferredUsername)) {
             throw DaonExceptionMgt.handleFlowServerException(
                     ErrorMessage.ERROR_ENROLMENT_IDENTITY_NOT_RETURNED);
@@ -464,11 +358,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                     ErrorMessage.ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN);
         }
 
-        // Bind the verified identity back to the account being recovered. login_hint is only a hint per
-        // OIDC — Daon verifies whoever actually presents themselves — so without this check anyone who
-        // completes a Daon verification with their own enrolled account satisfies the identity-proofing
-        // step for any other user's password reset. The hint is non-blank by the time we get here:
-        // execute() fails the flow up front when the user has no Daon association.
         String expectedSubject = flowExecutionContext.getAuthenticatorProperties().get(DAON_LOGIN_HINT);
         if (!DaonJwtUtil.isExpectedSubject(expectedSubject, returnedPreferredUsername)) {
             if (LOG.isDebugEnabled()) {
@@ -476,9 +365,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                         + "Expected: " + expectedSubject + ", returned preferred_username: "
                         + returnedPreferredUsername);
             }
-            // A client error, not a server fault: Daon worked correctly, it just verified someone other
-            // than the account holder being recovered. The compared identifiers are in the debug line
-            // above, so this one carries no personal identifier.
             LOG.error(ErrorMessage.ERROR_RECOVERY_IDENTITY_MISMATCH.getCode()
                     + " - The identity Daon verified does not match the Daon subject recorded for the "
                     + "account being recovered.");
@@ -487,16 +373,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         return new HashMap<>();
     }
 
-    /**
-     * Builds the subset of Daon-verified claims to write to a self-registering user's profile.
-     *
-     * @param daonClaims       the verified claims object from the ID token.
-     * @param extractedClaims  the Daon claims already resolved to local claim URIs — only the mapped ones
-     *                         reach here, so all of them belong on the profile.
-     * @param daonToLocalClaim Daon claim name -&gt; WSO2 local claim URI, from the connection's attribute
-     *                         mappings. Needed because the split name parts have to land on the same
-     *                         claims the connection maps the name claims to.
-     */
     private Map<String, Object> buildProfileClaims(JSONObject daonClaims, Map<String, String> extractedClaims,
                                                    Map<String, String> daonToLocalClaim) {
 
@@ -505,20 +381,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         return profileClaims;
     }
 
-    /**
-     * Ensures the name claims are populated. Split {@code given_name}/{@code family_name} claims take
-     * precedence; otherwise Daon's combined {@code family_name_and_given_name} is split on {@code ^}.
-     *
-     * <p>Each half is written to the local claim <b>the connection maps that Daon claim to</b>, not to the
-     * WSO2 standard name claims: every other claim on the profile goes through the connection's attribute
-     * mappings, and a split value is the same claim arriving in a different shape, so it has to be placed
-     * the same way. A connection that maps {@code given_name} to something other than
-     * {@code .../givenname} would otherwise get the split value on a claim it never asked for, while the
-     * claim it did map stayed empty.</p>
-     *
-     * <p>A name claim the connection does not map at all falls back to the corresponding WSO2 standard
-     * claim, so a connection that maps only the combined field keeps behaving as before.</p>
-     */
     private void populateNameClaims(JSONObject daonClaims, Map<String, Object> profileClaims,
                                     Map<String, String> daonToLocalClaim) {
 
@@ -526,8 +388,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                 WSO2_GIVENNAME_CLAIM_URI);
         String familyNameUri = resolveNameClaimUri(daonToLocalClaim, DaonConstants.CLAIM_FAMILY_NAME,
                 WSO2_LASTNAME_CLAIM_URI);
-        // Tested against the resolved URIs: a split claim Daon did return is already on the profile under
-        // that same URI, and wins over the combined field.
         boolean hasGiven = profileClaims.containsKey(givenNameUri);
         boolean hasLast = profileClaims.containsKey(familyNameUri);
         if (hasGiven && hasLast) {
@@ -540,7 +400,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             return;
         }
         String[] parts = combined.split(
-                java.util.regex.Pattern.quote(DaonConstants.DAON_FIELD_SEPARATOR), 2);
+                Pattern.quote(DaonConstants.DAON_FIELD_SEPARATOR), 2);
         String familyName = parts[0].trim();
         String givenName = parts.length > 1 ? parts[1].trim() : null;
         if (!hasGiven && StringUtils.isNotBlank(givenName)) {
@@ -551,14 +411,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         }
     }
 
-    /**
-     * The local claim a half of Daon's combined name is written to: the claim the connection maps that Daon
-     * claim to, or the WSO2 standard name claim when it maps none.
-     *
-     * @param daonToLocalClaim Daon claim name -&gt; WSO2 local claim URI.
-     * @param daonClaimName    the Daon name claim ({@code given_name} or {@code family_name}).
-     * @param defaultClaimUri  the WSO2 standard claim to fall back to.
-     */
     private String resolveNameClaimUri(Map<String, String> daonToLocalClaim, String daonClaimName,
                                        String defaultClaimUri) {
 
@@ -569,11 +421,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         return mappedClaimUri;
     }
 
-    /**
-     * Resolves the invited (already-existing) user's values for the given claim URIs. The flow engine
-     * does not guarantee the invited user's claims are loaded into the flow user, so values are taken
-     * from the flow user first and any still-missing ones are read from the user store by user id.
-     */
     private Map<String, String> resolveInvitedUserClaims(FlowExecutionContext context, Set<String> claimUris) {
 
         Map<String, String> resolved = new HashMap<>();
@@ -602,7 +449,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         }
         try {
             int tenantId = IdentityTenantUtil.getTenantId(context.getTenantDomain());
-            org.wso2.carbon.user.api.UserStoreManager usm = DaonConnectorDataHolder.getRealmService()
+            UserStoreManager usm = DaonConnectorDataHolder.getRealmService()
                     .getTenantUserRealm(tenantId).getUserStoreManager();
             if (usm instanceof UniqueIDUserStoreManager) {
                 Map<String, String> stored = ((UniqueIDUserStoreManager) usm)
@@ -622,26 +469,16 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         return resolved;
     }
 
-    /**
-     * Resolves the Daon {@code preferred_username} for the flow user (used as {@code login_hint} in
-     * password recovery) from the user's federated association with the Daon IDP.
-     */
     private String resolvePreferredUsername(FlowExecutionContext context) {
 
         if (context.getFlowUser() == null) {
             return null;
         }
-        // Domain-qualified, so the lookup uses the same key the enrolment wrote the association under —
-        // the flow user's own username is not qualified, and an unqualified one resolves to the primary
-        // userstore whatever store the user is really in.
         String username = DaonFederatedAssociationUtil.resolveQualifiedUsername(context.getFlowUser(),
                 context.getTenantDomain());
         if (StringUtils.isBlank(username)) {
             return null;
         }
-        // Look up the association against the Daon IDP the enrolment was recorded under: the referenced
-        // Identity Verifier connection (via daon_idp_id) for a login connection, shared across every
-        // login connection referencing the same one.
         String daonIdpName = resolveDaonIdpName(context);
         if (StringUtils.isBlank(daonIdpName)) {
             return null;
@@ -650,11 +487,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         return DaonFederatedAssociationUtil.getAssociatedDaonSubject(user, daonIdpName);
     }
 
-    /**
-     * Resolves the Daon IDP name the federated association is keyed on: the referenced Identity
-     * Verification connection's name when {@code daon_idp_id} is set (login connection), otherwise this
-     * connection's own name (self-contained Identity Verifier connection).
-     */
     private String resolveDaonIdpName(FlowExecutionContext context) {
 
         String idpResourceId = context.getAuthenticatorProperties().get(DAON_IDP_ID);
@@ -665,17 +497,10 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                 ? context.getExternalIdPConfig().getIdPName() : null;
     }
 
-    /**
-     * Builds the dynamic flow-portal URL used as the OIDC {@code redirect_uri} the flow engine sends to
-     * Daon; the browser returns here with the {@code code}/{@code state} and the portal resumes the flow.
-     * The portal path is flow-specific: password recovery uses the recovery portal ({@code /accounts/recovery})
-     * while registration and invited-user registration use the self-registration portal
-     * ({@code /accounts/register}) — mirroring the IS authentication-portal dynamic portal routes.
-     */
     private String buildPortalUrl(String tenantDomain, String flowType) {
 
-        String portalPath = "/accounts/"
-                + (FLOW_TYPE_PASSWORD_RECOVERY.equals(flowType) ? "recovery" : "register");
+        String portalPath = PORTAL_PATH_PREFIX
+                + (FLOW_TYPE_PASSWORD_RECOVERY.equals(flowType) ? PORTAL_PATH_RECOVERY : PORTAL_PATH_REGISTER);
         try {
             if (MultitenantConstants.SUPER_TENANT_DOMAIN_NAME.equals(tenantDomain)) {
                 return IdentityUtil.getServerURL(portalPath, true, true);
@@ -684,28 +509,17 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                 OrganizationManager orgManager = DaonConnectorDataHolder.getOrganizationManager();
                 if (orgManager != null) {
                     String orgId = orgManager.resolveOrganizationId(tenantDomain);
-                    return IdentityUtil.getServerURL("/o/" + orgId + portalPath, true, true);
+                    return IdentityUtil.getServerURL(ORGANIZATION_PATH_PREFIX + orgId + portalPath,
+                            true, true);
                 }
             }
-            return IdentityUtil.getServerURL("/t/" + tenantDomain + portalPath, true, true);
+            return IdentityUtil.getServerURL(TENANT_PATH_PREFIX + tenantDomain + portalPath, true, true);
         } catch (Exception e) {
-            // Deliberately broad: organization resolution throws a checked OrganizationManagementException
-            // while IdentityUtil.getServerURL can throw unchecked IdentityRuntimeException, and neither
-            // should stop the flow when a usable default portal URL exists.
             LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_BUILDING_PORTAL_URL, tenantDomain), e);
             return IdentityUtil.getServerURL(portalPath, true, true);
         }
     }
 
-    /**
-     * Resolves the pre-known values of the mapped claims, keyed by Daon claim name, so they can be sent
-     * to Daon as OIDC value-requests. For self-registration these come from what the user has entered so
-     * far (the flow user's collected claims); for invited users they come from the existing profile
-     * (flow user, falling back to the user store). Only mapped claims with a non-blank value are included.
-     *
-     * @param claimMappings WSO2 local claim URI -> Daon claim name.
-     * @return Daon claim name -> value; empty when nothing is populated yet.
-     */
     private Map<String, String> resolvePrefilledClaimValues(FlowExecutionContext context,
                                                              Map<String, String> claimMappings) {
 
@@ -736,10 +550,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         return valuesByDaonName;
     }
 
-    /**
-     * Reads the IDP claim mappings (WSO2 local claim URI -> Daon remote claim name) from the connection's
-     * claim configuration.
-     */
     private Map<String, String> getIdpClaimMappings(FlowExecutionContext context) {
 
         Map<String, String> mappings = new HashMap<>();

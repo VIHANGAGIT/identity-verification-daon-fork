@@ -19,49 +19,23 @@
 package org.wso2.carbon.identity.verification.daon.connector.constants;
 
 /**
- * Error catalogue for the Daon TrustX connector.
- *
- * <p>Every failure the connector can report has an entry here, so a code seen in a log line or in a flow
- * API error response maps to exactly one kind of failure. Where one kind can arise at more than one site,
- * the description carries a {@code %s} naming the site rather than the catalogue carrying a near-duplicate
- * entry per caller. Codes follow the WSO2 Identity Server
- * convention used across the connector pack: {@code 60xxx} for client errors (something the user or the
- * connection configuration can fix) and {@code 65xxx} for server errors. The {@code DAON-} prefix is
- * applied by {@link ErrorMessage#getCode()} rather than stored, so the enum literals stay bare digits.</p>
- *
- * @see org.wso2.carbon.identity.verification.daon.connector.exception.DaonExceptionMgt
+ * Error catalogue for the connector.
  */
-public class DaonErrorConstants {
+public final class DaonErrorConstants {
 
-    /** Prefix applied to every Daon error code, e.g. {@code DAON-65002}. */
     public static final String DAON_ERROR_PREFIX = "DAON-";
 
     private DaonErrorConstants() {
     }
 
     /**
-     * Daon connector errors.
-     *
-     * <p>{@code message} is the short, user-safe title. {@code description} is the diagnostic detail and
-     * may carry {@code %s} placeholders, formatted with the caller's arguments by
-     * {@link org.wso2.carbon.identity.verification.daon.connector.exception.DaonExceptionMgt}.</p>
-     *
-     * <p>{@code i18nKey} names the flow portal resource bundle entry that renders the failure to the end
-     * user, and is what makes an error user-facing at all: the portal shows an executor's message and
-     * description only when they arrive wrapped as {@code {{key}}} tokens (see
-     * {@link #getUserMessageToken()}), and falls back to its own localized flow-type wording otherwise.
+     * {@code message} is the user-safe title, {@code description} the diagnostic detail, and {@code i18nKey}
+     * the portal bundle entry.
      */
     public enum ErrorMessage {
 
         // Client errors - DAON-60xxx.
 
-        /**
-         * The user has no Daon federated association, so there is nothing to re-verify against.
-         *
-         * <p>The resulting {@code DAON-60001} is what an adaptive script's {@code onFail} handler keys off
-         * to route a not-enrolled user into enrolment (see {@code docs/adaptive-scripts}). No portal reads
-         * it: what the end user is shown comes from {@code i18nKey} below. Do not renumber it.</p>
-         */
         ERROR_USER_NOT_ENROLLED("60001",
                 "Your account is not enrolled with Daon TrustX for identity verification. "
                         + "Please contact your administrator.",
@@ -98,11 +72,6 @@ public class DaonErrorConstants {
                         + "being recovered. Expected: %s",
                 "daon.identity.verification.identity.mismatch"),
 
-        /**
-         * The login step's counterpart to {@link #ERROR_RECOVERY_IDENTITY_MISMATCH}: Daon verified an
-         * identity other than the one enrolled for the account being logged in to (or the enrolled
-         * identity could not be resolved at the callback, in which case the binding cannot be proven).
-         */
         ERROR_LOGIN_IDENTITY_MISMATCH("60008",
                 "Identity verification failed: the verified identity does not match the account you are "
                         + "signing in to.",
@@ -110,30 +79,12 @@ public class DaonErrorConstants {
                         + "authenticating user. The compared identifiers are logged at debug level, so "
                         + "this line carries no personal identifier."),
 
-        /**
-         * An enrolment was requested for a user who already has a Daon enrolment.
-         *
-         * <p>The check this reports is the one that keeps enrolment at login from becoming an account
-         * takeover. Re-verification and enrolment are mutually exclusive by account state: a user with an
-         * enrolment must satisfy it, and can never be routed around it into enrolling a second identity.
-         * Someone holding the account's first-factor credentials but not its enrolled identity would
-         * otherwise only have to fail the face verification to bind their own.</p>
-         *
-         * <p>Enforced in the authenticator, so no adaptive script can weaken it — a script asking to enrol
-         * an already-enrolled user fails the step here.</p>
-         */
         ERROR_ALREADY_ENROLLED("60009",
                 "Your account is already enrolled for identity verification. Please complete the "
                         + "verification, or contact your administrator if you cannot.",
                 "An enrolment was requested for a user who already has a Daon federated association on "
                         + "IDP: %s. Refusing to enrol a second identity for the account."),
 
-        /**
-         * An enrolment verified an identity that is already enrolled for a different local account.
-         *
-         * <p>Fails rather than logging the user in unenrolled: one Daon identity backing two accounts would
-         * let the same person satisfy identity proofing for either of them.</p>
-         */
         ERROR_DAON_IDENTITY_ALREADY_ENROLLED("60010",
                 "The verified identity is already enrolled for another account. "
                         + "Please contact your administrator.",
@@ -199,22 +150,10 @@ public class DaonErrorConstants {
                 "Error creating the Daon federated association for IDP: %s (the association may "
                         + "already exist)."),
 
-        /**
-         * The Daon verification could not be recorded against the user.
-         *
-         * <p>Raised, not just logged: an enrolment that is not recorded leaves the account looking
-         * not-enrolled at the next login, so both the flow path and the login path fail rather than
-         * report success.</p>
-         */
         ERROR_PERSISTING_FED_ASSOCIATION("65014",
                 "The Daon verification could not be recorded for the user.",
                 "The Daon federated association could not be persisted because %s."),
 
-        /**
-         * A stored-claim read failed while assembling the Daon claim value-requests. Covers every flow
-         * that does one; {@code %s} names which user could not be read, so the log line still identifies
-         * the site.
-         */
         ERROR_READING_USER_CLAIMS("65015",
                 "Could not read the user's stored claims.",
                 "Error reading the stored claims of %s; the corresponding Daon claim value-requests will "
@@ -233,11 +172,6 @@ public class DaonErrorConstants {
                 "Error registering the Daon connector OSGi services; the bundle is active but one or "
                         + "more services may be unregistered."),
 
-        /**
-         * Daon returned a token without the verified-claims block, so nothing in the response evidences a
-         * completed verification. The enrolment flows fail rather than continue: an empty verification
-         * result must not be mistaken for a successful one.
-         */
         ERROR_VERIFIED_CLAIMS_NOT_FOUND("65021",
                 "Daon did not return any verified identity claims.",
                 "The Daon ID token for the %s flow carries no 'verifiedClaims' (or no nested 'claims') "
@@ -265,14 +199,6 @@ public class DaonErrorConstants {
                 "The 'preferred_username' claim is not present in the Daon ID token returned for the "
                         + "enrolment, so there is no Daon subject to record for the user."),
 
-        /**
-         * {@code daon_idp_id} names a connection that is not a Daon one.
-         *
-         * <p>Raised instead of using it: the referenced connection is where a login connection reads its
-         * OIDC client id, secret and endpoints from, so a reference that is allowed to point anywhere lets
-         * a connection be configured to drive a verification request with another connection's credentials,
-         * against another provider's endpoints. Only a Daon connection may back a Daon request.</p>
-         */
         ERROR_REFERENCED_IDP_NOT_DAON("65027",
                 "The referenced connection is not a Daon Identity Verifier connection. Check the Daon "
                         + "Verifier ID configured on this connection.",
@@ -329,7 +255,7 @@ public class DaonErrorConstants {
         }
 
         /**
-         * @return the flow portal resource bundle key, or {@code null} when this error is not user-facing.
+         * @return the portal resource bundle key, or {@code null} when this error is not user-facing.
          */
         public String getI18nKey() {
 
@@ -337,10 +263,7 @@ public class DaonErrorConstants {
         }
 
         /**
-         * The heading the flow portal renders, as the {@code {{key}}} token that marks it user-facing.
-         *
-         * @return e.g. {@code {{daon.identity.verification.cancelled.message}}}, or {@code null} when this error
-         *         has no user-facing wording and the portal should keep its own.
+         * The heading the portal renders. The {@code {{ }}} wrapping is what marks it user-facing.
          */
         public String getUserMessageToken() {
 
@@ -348,10 +271,9 @@ public class DaonErrorConstants {
         }
 
         /**
-         * The body the flow portal renders, as the {@code {{key}}} token that marks it user-facing.
+         * The body the portal renders, wrapped as with {@link #getUserMessageToken()}.
          *
-         * @return e.g. {@code {{daon.identity.verification.cancelled.description}}}, or {@code null} when this
-         *         error has no user-facing wording.
+         * @return e.g. {@code {{daon.identity.verification.cancelled.description}}}, or {@code null}.
          */
         public String getUserDescriptionToken() {
 

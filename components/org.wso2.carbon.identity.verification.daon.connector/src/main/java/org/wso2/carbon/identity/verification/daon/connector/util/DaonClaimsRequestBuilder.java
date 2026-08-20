@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -18,6 +18,7 @@
 
 package org.wso2.carbon.identity.verification.daon.connector.util;
 
+import org.apache.commons.lang.StringUtils;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
@@ -49,16 +50,11 @@ import static org.wso2.carbon.identity.verification.daon.connector.constants.Dao
 
 /**
  * Builds the OIDC {@code claims} request parameter Daon expects for identity verification.
- *
- * <p>This is the one part of the Daon authorize request that is not standard OIDC — everything else
- * (client id, endpoints, scope, state, nonce, redirect URI) is built by the OIDC authenticator/executor
- * this connector extends. The parameter is passed to Daon as an additional query parameter.</p>
  */
 public final class DaonClaimsRequestBuilder {
 
     /**
-     * Document claims always requested alongside the mapped claims, so the verified document details are
-     * returned regardless of the connection's claim configuration.
+     * Requested alongside the mapped claims, so document details come back regardless of configuration.
      */
     private static final List<String> DOCUMENT_CLAIMS = Arrays.asList(
             CLAIM_DOCUMENT_TYPE,
@@ -69,13 +65,7 @@ public final class DaonClaimsRequestBuilder {
     );
 
     /**
-     * The claim values that are actually checkable against an identity document, and so are the only ones
-     * whose value-request gives an invited-user flow its "validate the pre-populated profile" guarantee.
-     *
-     * <p>An attribute like an email address or a phone number does not appear on a passport or driving
-     * licence, so sending it as a value-request verifies nothing: Daon has no document field to compare it
-     * with. A flow whose value-requests are all of that kind would report success while proving only that
-     * <em>some</em> valid document was presented.</p>
+     * The only claims whose value-request proves anything.
      */
     private static final List<String> DOCUMENT_VERIFIABLE_CLAIMS = Arrays.asList(
             CLAIM_GIVEN_NAME,
@@ -90,12 +80,18 @@ public final class DaonClaimsRequestBuilder {
     }
 
     /**
-     * Whether the pre-known claim values contain at least one attribute Daon can validate against the
-     * identity document, i.e. whether a value-request built from them actually proves anything about the
-     * person presenting the document.
+     * The Daon claim names a value-request can be checked against an identity document.
      *
-     * @param claimValues pre-known values keyed by Daon claim name; may be {@code null} or empty.
-     * @see #DOCUMENT_VERIFIABLE_CLAIMS
+     * @return an unmodifiable view of the document-verifiable claims.
+     */
+    public static List<String> getDocumentVerifiableClaims() {
+
+        return Collections.unmodifiableList(DOCUMENT_VERIFIABLE_CLAIMS);
+    }
+
+    /**
+     * Whether the values, keyed by Daon claim name, hold at least one attribute Daon can validate against
+     * the identity document.
      */
     public static boolean hasDocumentVerifiableValue(Map<String, String> claimValues) {
 
@@ -103,8 +99,7 @@ public final class DaonClaimsRequestBuilder {
             return false;
         }
         for (String claimName : DOCUMENT_VERIFIABLE_CLAIMS) {
-            String value = claimValues.get(claimName);
-            if (value != null && !value.trim().isEmpty()) {
+            if (StringUtils.isNotBlank(claimValues.get(claimName))) {
                 return true;
             }
         }
@@ -112,30 +107,7 @@ public final class DaonClaimsRequestBuilder {
     }
 
     /**
-     * Builds the OIDC {@code claims} request parameter JSON for the given Daon claim names.
-     *
-     * <p>If the list contains {@code given_name} or {@code family_name},
-     * {@code family_name_and_given_name} is automatically added as a fallback. Some identity
-     * documents store the full name as a single field; without this fallback Daon would return
-     * neither name claim for those documents.
-     *
-     * <p>When a claim's value is already known before Daon is triggered (e.g. an attribute the user
-     * populated earlier in a registration flow), it is sent as an OIDC value-request
-     * ({@code {"value": "..."}}) instead of {@code null}, so Daon verifies against that value.</p>
-     *
-     * <pre>
-     * {
-     *   "id_token": {
-     *     "verified_claims": {
-     *       "verification": { "trust_framework": "daon-identify-1" },
-     *       "claims": { "given_name": {"value": "JOHN"}, "family_name": null, ... }
-     *     }
-     *   }
-     * }
-     * </pre>
-     *
-     * @param daonClaimNames Daon claim names to request.
-     * @param claimValues    Pre-known values keyed by Daon claim name; may be empty.
+     * Builds the OIDC {@code claims} request parameter.
      */
     public static String buildClaimsParam(List<String> daonClaimNames, Map<String, String> claimValues)
             throws DaonServerException {
@@ -143,6 +115,8 @@ public final class DaonClaimsRequestBuilder {
         Map<String, String> values = claimValues != null ? claimValues : Collections.emptyMap();
         List<String> effectiveNames =
                 new ArrayList<>(daonClaimNames != null ? daonClaimNames : Collections.emptyList());
+        // Some documents store the full name as a single field; without this fallback Daon would return
+        // neither name claim for those.
         if ((effectiveNames.contains(CLAIM_GIVEN_NAME) || effectiveNames.contains(CLAIM_FAMILY_NAME))
                 && !effectiveNames.contains(CLAIM_FAMILY_NAME_AND_GIVEN_NAME)) {
             effectiveNames.add(CLAIM_FAMILY_NAME_AND_GIVEN_NAME);
@@ -157,7 +131,7 @@ public final class DaonClaimsRequestBuilder {
             JSONObject claimsObj = new JSONObject();
             for (String claimName : effectiveNames) {
                 String value = values.get(claimName);
-                if (value != null && !value.trim().isEmpty()) {
+                if (StringUtils.isNotBlank(value)) {
                     claimsObj.put(claimName, new JSONObject().put(CLAIM_VALUE_MEMBER, value));
                 } else {
                     claimsObj.put(claimName, JSONObject.NULL);
@@ -170,8 +144,6 @@ public final class DaonClaimsRequestBuilder {
             JSONObject idToken = new JSONObject().put(VERIFIED_CLAIMS, verifiedClaims);
             return new JSONObject().put(ID_TOKEN_CONTAINER, idToken).toString();
         } catch (JSONException e) {
-            // JSONObject.put throws unchecked on a null key or a non-finite number; surface it as a coded
-            // Daon failure rather than letting it cross the executor boundary untyped.
             throw DaonExceptionMgt.handleServerException(ErrorMessage.ERROR_BUILDING_CLAIMS_REQUEST, e);
         }
     }

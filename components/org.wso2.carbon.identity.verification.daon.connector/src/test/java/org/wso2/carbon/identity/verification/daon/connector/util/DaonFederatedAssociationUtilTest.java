@@ -35,12 +35,8 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNull;
 
 /**
- * Tests how the flow path names the local user its Daon association is keyed on.
- *
- * <p>The association is stored against (username, userstore domain, tenant) verbatim, and the login step
- * keys on the user's real userstore domain. So the flow path has to arrive at the same domain — an
- * unqualified flow-user name resolves to the primary userstore whatever store the user is really in, and
- * the enrolment and the later lookup then never meet.</p>
+ * Tests how the flow path names the local user its Daon association is keyed on: it has to arrive at the same
+ * userstore domain the login step keys on, or the enrolment and the later lookup never meet.
  */
 public class DaonFederatedAssociationUtilTest {
 
@@ -167,12 +163,8 @@ public class DaonFederatedAssociationUtilTest {
     }
 
     /**
-     * A flow user carrying no username at all resolves to nothing, so the callers report it rather than
-     * keying an association on a blank name.
-     *
-     * <p>{@link FlowUser} is mocked here rather than built: {@code getUsername()} is not a plain getter —
-     * with nothing set it derives a username through {@code FlowExecutionEngineUtils}, which reaches for
-     * the input-validation service and is not resolvable off-container.</p>
+     * {@link FlowUser} is mocked rather than built: with nothing set, {@code getUsername()} derives one via
+     * {@code FlowExecutionEngineUtils}, which is not resolvable off-container.
      */
     @Test
     public void testNoFlowUserOrNoUsernameResolvesToNothing() {

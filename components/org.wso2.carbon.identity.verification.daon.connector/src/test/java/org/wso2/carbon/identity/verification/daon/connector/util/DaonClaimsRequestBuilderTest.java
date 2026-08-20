@@ -25,6 +25,7 @@ import org.wso2.carbon.identity.verification.daon.connector.constants.DaonConsta
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.testng.Assert.assertEquals;
@@ -105,9 +106,8 @@ public class DaonClaimsRequestBuilderTest {
     }
 
     /**
-     * Attributes that do not appear on an identity document verify nothing: a flow whose value-requests
-     * are all of this kind would report success for any valid document, so it must not be treated as a
-     * profile validation.
+     * Attributes that do not appear on a document verify nothing, so a flow requesting only those must not be
+     * treated as a profile validation.
      */
     @Test
     public void testNonDocumentAttributesDoNotCount() {
@@ -126,5 +126,33 @@ public class DaonClaimsRequestBuilderTest {
                 Collections.singletonMap(DaonConstants.CLAIM_GIVEN_NAME, "   ")));
         assertFalse(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(Collections.emptyMap()));
         assertFalse(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(null));
+    }
+
+    /**
+     * The exposed list is what the DAON-65023 diagnostic names, so it must match what
+     * {@link DaonClaimsRequestBuilder#hasDocumentVerifiableValue} decides on.
+     */
+    @Test
+    public void testDocumentVerifiableClaimsAreTheOnesThatCount() {
+
+        List<String> exposed = DaonClaimsRequestBuilder.getDocumentVerifiableClaims();
+
+        assertEquals(exposed, Arrays.asList(
+                DaonConstants.CLAIM_GIVEN_NAME,
+                DaonConstants.CLAIM_FAMILY_NAME,
+                DaonConstants.CLAIM_FAMILY_NAME_AND_GIVEN_NAME,
+                DaonConstants.CLAIM_BIRTHDATE,
+                DaonConstants.CLAIM_DOCUMENT_NUMBER,
+                DaonConstants.CLAIM_DOCUMENT_PERSONAL_NUMBER));
+        for (String claimName : exposed) {
+            assertTrue(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(
+                    Collections.singletonMap(claimName, "some-value")), claimName + " must count");
+        }
+    }
+
+    @Test(expectedExceptions = UnsupportedOperationException.class)
+    public void testDocumentVerifiableClaimsCannotBeMutatedByCallers() {
+
+        DaonClaimsRequestBuilder.getDocumentVerifiableClaims().add(DaonConstants.CLAIM_ADDRESS);
     }
 }

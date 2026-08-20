@@ -38,11 +38,7 @@ import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.util.UserCoreUtil;
 
 /**
- * Helpers for storing the Daon verification state as a WSO2 federated identity association
- * (local user &lt;-&gt; Daon subject) in the built-in association store — no custom user claims.
- *
- * <p>The presence of an association with the Daon IDP means the user is Daon-verified; the
- * association's federated user id holds the Daon {@code preferred_username} used as {@code login_hint}.</p>
+ * Stores the Daon verification state as a federated identity association.
  */
 public final class DaonFederatedAssociationUtil {
 
@@ -52,16 +48,9 @@ public final class DaonFederatedAssociationUtil {
     }
 
     /**
-     * Builds an application-common {@link User} from a (possibly domain-qualified) username and tenant.
+     * Builds the {@link User} an association is keyed on, splitting the userstore domain off the username.
      *
-     * <p>The association is stored against the (username, userstore domain, tenant) triple verbatim — both
-     * {@code FederatedAssociationManagerImpl.createFederatedAssociation} and
-     * {@code getFederatedAssociationsOfUser} pass {@code getUserStoreDomain()} and {@code getUserName()}
-     * straight to the DAO — so the domain is part of the key and every caller has to arrive at the same
-     * one. An <b>unqualified</b> username does not: {@link UserCoreUtil#extractDomainFromName} answers
-     * with the bootstrap/primary domain for a name that carries none, whatever userstore the user is
-     * really in. Callers holding a bare username must resolve the domain first — see
-     * {@link #resolveQualifiedUsername(FlowUser, String)} for the flow path.</p>
+     * @return a user carrying the bare username, its userstore domain and the tenant.
      */
     public static User buildUser(String username, String tenantDomain) {
 
@@ -73,30 +62,9 @@ public final class DaonFederatedAssociationUtil {
     }
 
     /**
-     * The flow user's <b>domain-qualified</b> username, for building the {@link User} a flow's Daon
-     * association is keyed on.
+     * Resolves the flow user's domain-qualified username, from the flow user or the userstore by user id.
      *
-     * <p>{@code FlowUser.getUsername()} is whatever the flow collected — the username claim, or an email
-     * address — and is not domain-qualified by the flow engine. Handing it to
-     * {@link #buildUser(String, String)} as-is keys the association on the primary domain regardless of
-     * the userstore the user actually lives in, while the login step keys on the real domain (it rebuilds
-     * the name from {@code AuthenticatedUser.getUserStoreDomain()}). For a user outside the primary
-     * userstore the two never meet:</p>
-     * <ul>
-     *   <li>on the enrolment flows the write fails, because the association store checks the user exists
-     *       under the domain it was given — so a registration that has already verified with Daon and
-     *       provisioned the user ends on {@code DAON-65013};</li>
-     *   <li>on password recovery the read fails the same way and is caught as "no association", so an
-     *       enrolled user is turned away with {@code DAON-60001}.</li>
-     * </ul>
-     *
-     * <p>The domain is taken from the flow user when it carries one, and otherwise resolved from the
-     * userstore by user id. Falling back to the bare username keeps the previous behaviour for the
-     * primary-userstore case, where the two agree anyway.</p>
-     *
-     * @param flowUser     the flow user; may be {@code null}.
-     * @param tenantDomain tenant the user lives in.
-     * @return the qualified username, or {@code null} when the flow user carries no username at all.
+     * @return the qualified username, or {@code null} when the flow user carries none.
      */
     public static String resolveQualifiedUsername(FlowUser flowUser, String tenantDomain) {
 
@@ -117,16 +85,6 @@ public final class DaonFederatedAssociationUtil {
         return resolved != null ? resolved : username;
     }
 
-    /**
-     * Asks the userstore for the domain-qualified name of the user with the given id.
-     *
-     * <p>{@code getDomainQualifiedUsername()} is used rather than
-     * {@code AbstractUserStoreManager.getUserNameFromUserID}, which is only qualified on one of its two
-     * branches.</p>
-     *
-     * @return the qualified username, or {@code null} when it cannot be resolved — the caller then keeps
-     *         the unqualified name, which is what it would have used anyway.
-     */
     private static String resolveDomainQualifiedUsername(String userId, String tenantDomain) {
 
         if (StringUtils.isBlank(userId) || StringUtils.isBlank(tenantDomain)
@@ -140,6 +98,8 @@ public final class DaonFederatedAssociationUtil {
             if (!(userStoreManager instanceof UniqueIDUserStoreManager)) {
                 return null;
             }
+            // getDomainQualifiedUsername() rather than getUserNameFromUserID, which is only qualified on
+            // one of its two branches.
             org.wso2.carbon.user.core.common.User storeUser =
                     ((UniqueIDUserStoreManager) userStoreManager).getUserWithID(userId, null, null);
             if (storeUser != null && StringUtils.isNotBlank(storeUser.getDomainQualifiedUsername())) {
@@ -152,27 +112,16 @@ public final class DaonFederatedAssociationUtil {
     }
 
     /**
-     * Returns the Daon subject ({@code preferred_username}) from the user's association with the given
-     * Daon IDP.
+     * Reads the Daon subject from the user's association with the given IDP; {@code null} means not enrolled.
      *
-     * <p><b>Null and empty mean different things and callers must not conflate them:</b></p>
-     * <ul>
-     *   <li>{@code null} — no association with that IDP could be found (not enrolled), or the lookup could
-     *       not be performed at all. Nothing proves the user is enrolled.</li>
-     *   <li>the <b>empty string</b> — an association exists but carries no federated user id. The user
-     *       <em>is</em> enrolled, but there is no usable {@code login_hint} to re-verify against.</li>
-     *   <li>a non-blank value — enrolled, and this is the Daon subject to hint at and bind the response
-     *       to.</li>
-     * </ul>
-     *
-     * <p>So "is this user enrolled?" is a {@code != null} test, and "do I have a usable subject?" is a
-     * not-blank test. Testing not-blank for the former would let an account with an empty association past
-     * an already-enrolled guard and enrol a second identity for it.</p>
+     * @return the recorded subject, or the empty string when the association carries none.
      */
     public static String getAssociatedDaonSubject(User user, String idpName) {
 
         if (user == null || StringUtils.isBlank(idpName)) {
-            LOG.debug("Null user or blank IDP name; cannot resolve the Daon verification state.");
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Null user or blank IDP name; cannot resolve the Daon verification state.");
+            }
             return null;
         }
         FederatedAssociationManager manager = DaonConnectorDataHolder.getFederatedAssociationManager();
@@ -193,8 +142,6 @@ public final class DaonFederatedAssociationUtil {
                 }
             }
         } catch (FederatedAssociationManagerClientException e) {
-            // Expected, the user identifier does not resolve to an existing user. Password recovery routes even a
-            // non-existent user through the first step (to avoid user enumeration).
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Could not resolve Daon federated associations for the user (the user likely does "
                         + "not exist); treating as not verified. IDP: " + idpName, e);
@@ -206,20 +153,17 @@ public final class DaonFederatedAssociationUtil {
     }
 
     /**
-     * Returns the username of the local user already associated with the given Daon subject on the given
-     * Daon IDP, or {@code null} if no local user has claimed that Daon identity (or the lookup could not be
-     * performed).
+     * Looks up the local user that already holds the given Daon subject on the given IDP.
      *
-     * <p>Used before an enrolment records an association, to keep one Daon identity from backing two
-     * accounts. A {@code null} return does not by itself prove the identity is unclaimed — it also covers a
-     * failed lookup — so a caller relying on exclusivity must still treat a subsequent association failure
-     * (the store enforces uniqueness) as the authoritative answer.</p>
+     * @return the username, or {@code null} if unclaimed or the lookup failed.
      */
     public static String getLocalUserForDaonSubject(String tenantDomain, String idpName, String daonSubject) {
 
         if (StringUtils.isBlank(tenantDomain) || StringUtils.isBlank(idpName)
                 || StringUtils.isBlank(daonSubject)) {
-            LOG.debug("Blank tenant domain, IDP name or Daon subject; cannot resolve the associated user.");
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Blank tenant domain, IDP name or Daon subject; cannot resolve the associated user.");
+            }
             return null;
         }
         FederatedAssociationManager manager = DaonConnectorDataHolder.getFederatedAssociationManager();
@@ -237,14 +181,7 @@ public final class DaonFederatedAssociationUtil {
     }
 
     /**
-     * Creates a federated association between the local user and the Daon IDP.
-     *
-     * <p>Never throws: the failure — most commonly that the store rejected the write because the Daon
-     * identity is already associated — is logged with its code and reported through the return value, so
-     * the caller decides how to react. Both callers treat a failed write as fatal (the login step fails
-     * the authentication, the registration listener fails the flow), so a caller that can legitimately
-     * tolerate an existing association must rule that case out first — see
-     * {@link #getAssociatedDaonSubject(User, String)}.</p>
+     * Creates the association between the local user and the Daon IDP, logging any failure with its code.
      *
      * @return {@code true} if the association was created.
      */
@@ -265,11 +202,6 @@ public final class DaonFederatedAssociationUtil {
             manager.createFederatedAssociation(user, idpName, daonSubject);
             return true;
         } catch (FederatedAssociationManagerException e) {
-            // Not ignorable: both callers treat a failed write as fatal, so this is logged with its code
-            // and reported through the return value rather than swallowed. The store rejects a write when
-            // the Daon subject is already associated on this IDP, or when the user does not exist under
-            // the (username, userstore domain, tenant) it was given — so the caller has to have named the
-            // user the same way the read side does.
             LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_CREATING_FED_ASSOCIATION, idpName), e);
             return false;
         }

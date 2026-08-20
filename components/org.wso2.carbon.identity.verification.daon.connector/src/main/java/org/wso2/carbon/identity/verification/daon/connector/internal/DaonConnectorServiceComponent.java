@@ -41,8 +41,7 @@ import org.wso2.carbon.idp.mgt.IdpManager;
 import org.wso2.carbon.user.core.service.RealmService;
 
 /**
- * OSGi service component for the Daon TrustX connector. Registers the login authenticator, the flow
- * executor and the federated-association listener, and holds the service references they need.
+ * OSGi service component for the Daon TrustX connector.
  */
 @Component(
         name = "identity.verification.daon.connector",
@@ -65,8 +64,7 @@ public class DaonConnectorServiceComponent {
                 LOG.debug("Daon connector bundle activated successfully.");
             }
         } catch (Exception e) {
-            // Errors (OutOfMemoryError and friends) are deliberately not caught here — a bundle activator
-            // must not swallow them.
+            // Exception, not Throwable: a bundle activator must not swallow an Error.
             LOG.fatal(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_ACTIVATING_BUNDLE), e);
         }
     }
