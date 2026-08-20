@@ -375,8 +375,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             throw DaonExceptionMgt.toFlowServerException(e);
         }
 
-        String subject = idTokenPayload.optString(DaonConstants.JWT_SUBJECT_CLAIM, null);
-        if (StringUtils.isBlank(subject)) {
+        if (StringUtils.isBlank(idTokenPayload.optString(DaonConstants.JWT_SUBJECT_CLAIM, null))) {
             throw DaonExceptionMgt.handleFlowServerException(ErrorMessage.ERROR_SUBJECT_CLAIM_NOT_FOUND,
                     flowExecutionContext.getFlowType());
         }
@@ -389,16 +388,18 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             reverseClaimMap.put(entry.getValue(), entry.getKey()); // Daon name -> WSO2 URI
         }
 
+        // Only the claims the connection maps: an unmapped Daon claim has no local claim to be written to,
+        // and nothing downstream consumes one.
         Map<String, String> extractedClaims = new HashMap<>();
-        for (Object keyObj : daonClaims.keySet()) {
-            String key = (String) keyObj;
-            String claimValue = DaonJwtUtil.resolveClaimValue(key, daonClaims.get(key));
-            if (claimValue == null) {
+        for (String key : daonClaims.keySet()) {
+            String claimUri = reverseClaimMap.get(key);
+            if (claimUri == null) {
                 continue;
             }
-            String claimUri = reverseClaimMap.getOrDefault(key,
-                    DaonConstants.CLAIM_DIALECT_URI + "/" + key);
-            extractedClaims.put(claimUri, claimValue);
+            String claimValue = DaonJwtUtil.resolveClaimValue(key, daonClaims.get(key));
+            if (claimValue != null) {
+                extractedClaims.put(claimUri, claimValue);
+            }
         }
 
         String preferredUsername = idTokenPayload.optString(DaonConstants.JWT_PREFERRED_USERNAME_CLAIM, null);
@@ -411,7 +412,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
 
         // Self-registration: Daon is the source of truth, so provision the new user's profile.
         if (FLOW_TYPE_REGISTRATION.equals(flowExecutionContext.getFlowType())) {
-            userAttributes.putAll(buildProfileClaims(daonClaims, extractedClaims));
+            userAttributes.putAll(buildProfileClaims(daonClaims, extractedClaims, reverseClaimMap));
         }
 
         // Record the Daon verification as a federated association (local user <-> Daon subject),
@@ -488,27 +489,47 @@ public class DaonExecutor extends OpenIDConnectExecutor {
 
     /**
      * Builds the subset of Daon-verified claims to write to a self-registering user's profile.
+     *
+     * @param daonClaims       the verified claims object from the ID token.
+     * @param extractedClaims  the Daon claims already resolved to local claim URIs — only the mapped ones
+     *                         reach here, so all of them belong on the profile.
+     * @param daonToLocalClaim Daon claim name -&gt; WSO2 local claim URI, from the connection's attribute
+     *                         mappings. Needed because the split name parts have to land on the same
+     *                         claims the connection maps the name claims to.
      */
-    private Map<String, Object> buildProfileClaims(JSONObject daonClaims, Map<String, String> extractedClaims) {
+    private Map<String, Object> buildProfileClaims(JSONObject daonClaims, Map<String, String> extractedClaims,
+                                                   Map<String, String> daonToLocalClaim) {
 
-        Map<String, Object> profileClaims = new HashMap<>();
-        for (Map.Entry<String, String> entry : extractedClaims.entrySet()) {
-            if (!entry.getKey().startsWith(DaonConstants.CLAIM_DIALECT_URI)) {
-                profileClaims.put(entry.getKey(), entry.getValue());
-            }
-        }
-        populateNameClaims(daonClaims, profileClaims);
+        Map<String, Object> profileClaims = new HashMap<>(extractedClaims);
+        populateNameClaims(daonClaims, profileClaims, daonToLocalClaim);
         return profileClaims;
     }
 
     /**
-     * Ensures givenname/lastname are populated. Split {@code given_name}/{@code family_name} claims take
+     * Ensures the name claims are populated. Split {@code given_name}/{@code family_name} claims take
      * precedence; otherwise Daon's combined {@code family_name_and_given_name} is split on {@code ^}.
+     *
+     * <p>Each half is written to the local claim <b>the connection maps that Daon claim to</b>, not to the
+     * WSO2 standard name claims: every other claim on the profile goes through the connection's attribute
+     * mappings, and a split value is the same claim arriving in a different shape, so it has to be placed
+     * the same way. A connection that maps {@code given_name} to something other than
+     * {@code .../givenname} would otherwise get the split value on a claim it never asked for, while the
+     * claim it did map stayed empty.</p>
+     *
+     * <p>A name claim the connection does not map at all falls back to the corresponding WSO2 standard
+     * claim, so a connection that maps only the combined field keeps behaving as before.</p>
      */
-    private void populateNameClaims(JSONObject daonClaims, Map<String, Object> profileClaims) {
+    private void populateNameClaims(JSONObject daonClaims, Map<String, Object> profileClaims,
+                                    Map<String, String> daonToLocalClaim) {
 
-        boolean hasGiven = profileClaims.containsKey(WSO2_GIVENNAME_CLAIM_URI);
-        boolean hasLast = profileClaims.containsKey(WSO2_LASTNAME_CLAIM_URI);
+        String givenNameUri = resolveNameClaimUri(daonToLocalClaim, DaonConstants.CLAIM_GIVEN_NAME,
+                WSO2_GIVENNAME_CLAIM_URI);
+        String familyNameUri = resolveNameClaimUri(daonToLocalClaim, DaonConstants.CLAIM_FAMILY_NAME,
+                WSO2_LASTNAME_CLAIM_URI);
+        // Tested against the resolved URIs: a split claim Daon did return is already on the profile under
+        // that same URI, and wins over the combined field.
+        boolean hasGiven = profileClaims.containsKey(givenNameUri);
+        boolean hasLast = profileClaims.containsKey(familyNameUri);
         if (hasGiven && hasLast) {
             return;
         }
@@ -523,11 +544,29 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         String familyName = parts[0].trim();
         String givenName = parts.length > 1 ? parts[1].trim() : null;
         if (!hasGiven && StringUtils.isNotBlank(givenName)) {
-            profileClaims.put(WSO2_GIVENNAME_CLAIM_URI, givenName);
+            profileClaims.put(givenNameUri, givenName);
         }
         if (!hasLast && StringUtils.isNotBlank(familyName)) {
-            profileClaims.put(WSO2_LASTNAME_CLAIM_URI, familyName);
+            profileClaims.put(familyNameUri, familyName);
         }
+    }
+
+    /**
+     * The local claim a half of Daon's combined name is written to: the claim the connection maps that Daon
+     * claim to, or the WSO2 standard name claim when it maps none.
+     *
+     * @param daonToLocalClaim Daon claim name -&gt; WSO2 local claim URI.
+     * @param daonClaimName    the Daon name claim ({@code given_name} or {@code family_name}).
+     * @param defaultClaimUri  the WSO2 standard claim to fall back to.
+     */
+    private String resolveNameClaimUri(Map<String, String> daonToLocalClaim, String daonClaimName,
+                                       String defaultClaimUri) {
+
+        String mappedClaimUri = daonToLocalClaim.get(daonClaimName);
+        if (StringUtils.isBlank(mappedClaimUri)) {
+            return defaultClaimUri;
+        }
+        return mappedClaimUri;
     }
 
     /**
@@ -577,7 +616,8 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                 }
             }
         } catch (UserStoreException e) {
-            LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_READING_USER_CLAIMS), e);
+            LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_READING_USER_CLAIMS,
+                    "the invited user"), e);
         }
         return resolved;
     }
@@ -591,7 +631,11 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         if (context.getFlowUser() == null) {
             return null;
         }
-        String username = context.getFlowUser().getUsername();
+        // Domain-qualified, so the lookup uses the same key the enrolment wrote the association under —
+        // the flow user's own username is not qualified, and an unqualified one resolves to the primary
+        // userstore whatever store the user is really in.
+        String username = DaonFederatedAssociationUtil.resolveQualifiedUsername(context.getFlowUser(),
+                context.getTenantDomain());
         if (StringUtils.isBlank(username)) {
             return null;
         }

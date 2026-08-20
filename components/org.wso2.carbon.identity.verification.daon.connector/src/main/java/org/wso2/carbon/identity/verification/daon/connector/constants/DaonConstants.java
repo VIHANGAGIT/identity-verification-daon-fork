@@ -18,10 +18,6 @@
 
 package org.wso2.carbon.identity.verification.daon.connector.constants;
 
-import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
-import org.wso2.carbon.identity.verification.daon.connector.exception.DaonClientException;
-import org.wso2.carbon.identity.verification.daon.connector.exception.DaonExceptionMgt;
-
 /**
  * Constants used across the Daon TrustX connector — the API client, the login authenticator and the
  * flow executor.
@@ -224,13 +220,10 @@ public class DaonConstants {
     public static final String FLOW_TYPE_REGISTRATION = "REGISTRATION";
     public static final String FLOW_TYPE_INVITED_USER_REGISTRATION = "INVITED_USER_REGISTRATION";
 
-    /**
-     * Fallback claim dialect URI for Daon claims not mapped to a WSO2 local claim.
-     */
-    public static final String CLAIM_DIALECT_URI = "http://wso2.org/daon/claims";
-
     /*
-     * WSO2 standard name claim URIs that may be matched against Daon's combined family_name_and_given_name.
+     * Default targets for the halves of Daon's combined family_name_and_given_name, used only when the
+     * connection maps no local claim for the corresponding Daon name claim. A mapped name claim wins — see
+     * DaonExecutor#populateNameClaims.
      */
     public static final String WSO2_LASTNAME_CLAIM_URI = "http://wso2.org/claims/lastname";
     public static final String WSO2_GIVENNAME_CLAIM_URI = "http://wso2.org/claims/givenname";
