@@ -88,11 +88,13 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
 
     @Override
     public String getName() {
+
         return DaonConstants.AUTHENTICATOR_NAME;
     }
 
     @Override
     public String getFriendlyName() {
+
         return DaonConstants.AUTHENTICATOR_FRIENDLY_NAME;
     }
 

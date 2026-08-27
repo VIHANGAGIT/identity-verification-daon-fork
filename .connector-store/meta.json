@@ -1,0 +1,19 @@
+{
+  "name": "Daon TrustX Identity Verification",
+  "owner": "WSO2",
+  "category": "Identity Verification",
+  "documentationUrl": "https://github.com/wso2-extensions/identity-verification-daon/blob/main/README.md",
+  "description": "The Daon TrustX connector adds identity verification to WSO2 Identity Server using document checks and facial biometrics. It verifies users against passports, driver's licenses and national IDs during registration, and re-verifies enrolled users at login and password recovery, provisioning verified attributes to the user profile.",
+  "status": "Active",
+  "labels": [
+    "Identity Verification",
+    "Daon TrustX"
+  ],
+  "releases": [
+    {
+      "tagName": "v1.0.0",
+      "products": [
+      ]
+    }
+  ]
+}

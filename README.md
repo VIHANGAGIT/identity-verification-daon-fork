@@ -52,7 +52,8 @@ Artifacts produced (a single OSGi bundle — **no WAR**):
 
 | Artifact | Location |
 |---|---|
-| Connector bundle (authenticator + executor + Daon API client) | `components/org.wso2.carbon.identity.verification.daon.connector/target/org.wso2.carbon.identity.verification.daon.connector-*.jar` |
+| Connector bundle (authenticator + executor + listener) | `components/org.wso2.carbon.identity.verification.daon.connector/target/org.wso2.carbon.identity.verification.daon.connector-*.jar` |
+| Release archive (bundle + connection templates + setup script) | `components/org.wso2.carbon.identity.verification.daon.connector/target/wso2is-daon-connector-*.zip` |
 
 ---
 
@@ -60,25 +61,40 @@ Artifacts produced (a single OSGi bundle — **no WAR**):
 
 ### 1. Copy artifacts to WSO2 IS
 
+Use the release archive (recommended). Extract it inside `<IS_HOME>`, change into the extracted
+directory and run the setup script — it moves the bundle into `dropins` and both connection templates
+into the connection-extensions directory:
+
 ```bash
 IS_HOME=/path/to/wso2is
 
+unzip wso2is-daon-connector-*.zip -d $IS_HOME
+cd $IS_HOME/wso2is-daon-connector-*
+./setup_daon.sh
+```
+
+Or place the artifacts by hand:
+
+```bash
+IS_HOME=/path/to/wso2is
+C=components/org.wso2.carbon.identity.verification.daon.connector
+
 # OSGi bundle
-cp components/org.wso2.carbon.identity.verification.daon.connector/target/\
-org.wso2.carbon.identity.verification.daon.connector-*.jar \
+cp $C/target/org.wso2.carbon.identity.verification.daon.connector-*.jar \
 $IS_HOME/repository/components/dropins/
 
-# UI metadata — both Daon TrustX connection templates
-cp -r ui-metadata/daon-idv ui-metadata/daon-authenticator \
-$IS_HOME/repository/resources/identity/extensions/connections/
+# Both Daon TrustX connection templates
+cp -r $C/resources/daon-idv $C/resources/daon-authenticator \
+$IS_HOME/repository/resources/identity/extensions/identity-providers/
 
 # Daon logo
-cp ui-metadata/assets/images/logos/daon.svg \
+cp $C/resources/assets/images/logos/daon.svg \
 $IS_HOME/repository/deployment/server/webapps/console/resources/connections/assets/images/logos/
 ```
 
-> The exact `connections` metadata path can vary by IS version — place `daon-idv` (Identity
-> Verification / enrol) and `daon-authenticator` (login) where your IS build reads connection templates.
+> Both templates are `identity-provider` resources, so they go under
+> `resources/identity/extensions/identity-providers/`. The exact path can vary by IS version — place
+> `daon-idv` (enrol) and `daon-authenticator` (login) where your IS build reads connection templates.
 
 > **Upgrading from an earlier build?** The authenticator and connector bundles have been consolidated
 > into the single `org.wso2.carbon.identity.verification.daon.connector` bundle. Delete any previously

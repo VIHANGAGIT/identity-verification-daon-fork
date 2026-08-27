@@ -60,14 +60,6 @@
                 <artifactId>org.wso2.carbon.identity.application.authenticator.oidc</artifactId>
                 <version>5.12.36</version>
             </dependency>
-            <!--
-            The artifact that actually reaches the classpath, transitively via the OIDC authenticator.
-            Pinned to the version that resolves today, and declared directly by the connector module
-            because it compiles against org.apache.oltu.oauth2.client.response.OAuthClientResponse.
-            Note the artifactId: this is `oltu`, not the `oltu-jdk21` that used to be managed here —
-            that coordinate never appeared in the resolved tree, so the pin had no effect, and declaring
-            it would have put two overlapping oltu jars on the classpath.
-            -->
             <dependency>
                 <groupId>org.wso2.orbit.org.apache.oltu.oauth2</groupId>
                 <artifactId>oltu</artifactId>
@@ -347,6 +339,7 @@
         <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>
         <build.helper.maven.plugin.version>1.8</build.helper.maven.plugin.version>
         <maven.checkstyleplugin.version>3.1.0</maven.checkstyleplugin.version>
+        <maven.assembly.plugin.version>3.7.1</maven.assembly.plugin.version>
         <spotbugs-maven-plugin.version>4.8.4.0</spotbugs-maven-plugin.version>
 
         <compiler-source.version>21</compiler-source.version>
