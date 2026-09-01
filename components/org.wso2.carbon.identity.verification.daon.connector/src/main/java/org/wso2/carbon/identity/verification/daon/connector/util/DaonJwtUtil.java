@@ -66,17 +66,17 @@ public final class DaonJwtUtil {
     public static JSONObject extractVerifiedClaims(JSONObject idTokenPayload, String flowType)
             throws DaonServerException {
 
-        if (idTokenPayload == null || !idTokenPayload.has(DaonConstants.JWT_VERIFIED_CLAIMS_OBJECT)) {
+        if (idTokenPayload == null || !idTokenPayload.has(DaonConstants.IdTokenClaims.VERIFIED_CLAIMS_OBJECT)) {
             throw DaonExceptionMgt.handleServerException(ErrorMessage.ERROR_VERIFIED_CLAIMS_NOT_FOUND,
                     flowType);
         }
-        JSONObject verifiedClaims = idTokenPayload.optJSONObject(DaonConstants.JWT_VERIFIED_CLAIMS_OBJECT);
+        JSONObject verifiedClaims = idTokenPayload.optJSONObject(DaonConstants.IdTokenClaims.VERIFIED_CLAIMS_OBJECT);
         if (verifiedClaims == null) {
             throw DaonExceptionMgt.handleServerException(ErrorMessage.ERROR_VERIFIED_CLAIMS_NOT_FOUND,
                     flowType);
         }
         validateTrustFramework(verifiedClaims);
-        JSONObject claims = verifiedClaims.optJSONObject(DaonConstants.JWT_CLAIMS_OBJECT);
+        JSONObject claims = verifiedClaims.optJSONObject(DaonConstants.IdTokenClaims.CLAIMS_OBJECT);
         if (claims == null) {
             throw DaonExceptionMgt.handleServerException(ErrorMessage.ERROR_VERIFIED_CLAIMS_NOT_FOUND,
                     flowType);
@@ -86,9 +86,9 @@ public final class DaonJwtUtil {
 
     private static void validateTrustFramework(JSONObject verifiedClaims) throws DaonServerException {
 
-        JSONObject verification = verifiedClaims.optJSONObject(DaonConstants.VERIFICATION);
+        JSONObject verification = verifiedClaims.optJSONObject(DaonConstants.ClaimsRequest.VERIFICATION);
         String trustFramework = verification != null
-                ? verification.optString(DaonConstants.TRUST_FRAMEWORK, null) : null;
+                ? verification.optString(DaonConstants.ClaimsRequest.TRUST_FRAMEWORK, null) : null;
         if (trustFramework == null) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("The Daon ID token carries no verification.trust_framework descriptor; accepting the "
@@ -96,9 +96,9 @@ public final class DaonJwtUtil {
             }
             return;
         }
-        if (!DaonConstants.TRUST_FRAMEWORK_VALUE.equals(trustFramework)) {
+        if (!DaonConstants.ClaimsRequest.TRUST_FRAMEWORK_VALUE.equals(trustFramework)) {
             throw DaonExceptionMgt.handleServerException(ErrorMessage.ERROR_TRUST_FRAMEWORK_MISMATCH,
-                    trustFramework, DaonConstants.TRUST_FRAMEWORK_VALUE);
+                    trustFramework, DaonConstants.ClaimsRequest.TRUST_FRAMEWORK_VALUE);
         }
     }
 
@@ -112,9 +112,9 @@ public final class DaonJwtUtil {
         }
         if (value instanceof JSONObject) {
             JSONObject nested = (JSONObject) value;
-            if (DaonConstants.CLAIM_ADDRESS.equals(key)
-                    && nested.has(DaonConstants.CLAIM_ADDRESS_FORMATTED)) {
-                Object formatted = nested.get(DaonConstants.CLAIM_ADDRESS_FORMATTED);
+            if (DaonConstants.DaonClaims.ADDRESS.equals(key)
+                    && nested.has(DaonConstants.DaonClaims.ADDRESS_FORMATTED)) {
+                Object formatted = nested.get(DaonConstants.DaonClaims.ADDRESS_FORMATTED);
                 return formatted != null && !JSONObject.NULL.equals(formatted) ? formatted.toString() : null;
             }
             return nested.toString();

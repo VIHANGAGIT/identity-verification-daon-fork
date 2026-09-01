@@ -69,7 +69,7 @@ public final class DaonErrorConstants {
                 "Identity verification failed: the verified identity does not match the user being "
                         + "recovered.",
                 "The identity Daon verified does not match the Daon subject recorded for the account "
-                        + "being recovered. Expected: %s",
+                        + "being recovered.",
                 "daon.identity.verification.identity.mismatch"),
 
         ERROR_LOGIN_IDENTITY_MISMATCH("60008",
@@ -162,10 +162,6 @@ public final class DaonErrorConstants {
         ERROR_BUILDING_CLAIMS_REQUEST("65017",
                 "Could not build the Daon claims request.",
                 "Error building the OIDC claims request parameter for the Daon authorization request."),
-
-        ERROR_BUILDING_PORTAL_URL("65018",
-                "Could not build the flow portal URL.",
-                "Error building the portal URL for tenant: %s; falling back to the default portal URL."),
 
         ERROR_ACTIVATING_BUNDLE("65020",
                 "Could not activate the Daon connector bundle.",

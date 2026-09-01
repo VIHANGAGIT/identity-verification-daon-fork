@@ -87,6 +87,11 @@
             </dependency>
             <dependency>
                 <groupId>org.wso2.carbon.identity.framework</groupId>
+                <artifactId>org.wso2.carbon.identity.central.log.mgt</artifactId>
+                <version>${carbon.identity.framework.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.wso2.carbon.identity.framework</groupId>
                 <artifactId>org.wso2.carbon.identity.flow.execution.engine</artifactId>
                 <version>${carbon.identity.framework.version}</version>
             </dependency>
@@ -131,14 +136,14 @@
                 <version>${carbon.kernel.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.wso2.carbon</groupId>
+                <artifactId>org.wso2.carbon.utils</artifactId>
+                <version>${carbon.kernel.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-lang3</artifactId>
                 <version>${commons-lang3.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.wso2.carbon.identity.organization.management.core</groupId>
-                <artifactId>org.wso2.carbon.identity.organization.management.service</artifactId>
-                <version>${identity.organization.management.service.version}</version>
             </dependency>
             <!-- Testing related dependencies -->
             <dependency>
@@ -301,7 +306,6 @@
         <jackson-core.version>2.13.2</jackson-core.version>
         <slf4j.version>1.7.22</slf4j.version>
         <carbon.identity.framework.version>7.11.168</carbon.identity.framework.version>
-        <identity.organization.management.service.version>1.1.60</identity.organization.management.service.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <org.eclipse.osgi.services.version>3.3.100.v20130513-1956</org.eclipse.osgi.services.version>
         <org.eclipse.osgi.version>3.9.1.v20130814-1242</org.eclipse.osgi.version>
@@ -317,6 +321,7 @@
         <osgi.service.component.imp.pkg.version.range>[1.2.0, 2.0.0)</osgi.service.component.imp.pkg.version.range>
         <carbon.kernel.package.import.version.range>[4.6.0, 5.0.0)</carbon.kernel.package.import.version.range>
         <commons-lang.wso2.osgi.version.range>[2.6.0,3.0.0)</commons-lang.wso2.osgi.version.range>
+        <apache.common.collections4.imp.pkg.version.range>[4.1.0,5.0.0)</apache.common.collections4.imp.pkg.version.range>
         <import.package.version.commons.logging>[1.2.0,2.0.0)</import.package.version.commons.logging>
         <json.wso2.version.range>[3.0.0.wso2v1, 4.0.0)</json.wso2.version.range>
         <carbon.identity.package.import.version.range>[5.14.67, 8.0.0)</carbon.identity.package.import.version.range>
@@ -326,7 +331,6 @@
         <imp.pkg.version.javax.servlet>[2.6,4)</imp.pkg.version.javax.servlet>
         <oltu.package.import.version.range>[1.0.0.wso2v1,2.0.0)</oltu.package.import.version.range>
         <carbon.identity.application.authenticator.oidc.imp.pkg.version.range>[5.12.0,8.0.0)</carbon.identity.application.authenticator.oidc.imp.pkg.version.range>
-        <identity.organization.management.imp.pkg.version.range>[1.0.0,3.0.0)</identity.organization.management.imp.pkg.version.range>
 
         <!-- Unit test versions -->
         <testng.version>7.10.1</testng.version>

@@ -22,7 +22,6 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authenticator.oidc.OIDCAuthenticatorConstants;
-import org.wso2.carbon.identity.application.common.model.ClaimMapping;
 import org.wso2.carbon.identity.application.common.model.FederatedAuthenticatorConfig;
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
 import org.wso2.carbon.identity.application.common.model.Property;
@@ -55,7 +54,7 @@ public final class DaonReferencedIdpUtil {
             OIDCAuthenticatorConstants.OAUTH2_AUTHZ_URL,
             OIDCAuthenticatorConstants.OAUTH2_TOKEN_URL,
             IdentityApplicationConstants.Authenticator.OIDC.SCOPES,
-            DaonConstants.DAON_ENROL_PD);
+            DaonConstants.ConnectionProperties.ENROL_PD);
 
     private DaonReferencedIdpUtil() {
     }
@@ -79,7 +78,7 @@ public final class DaonReferencedIdpUtil {
 
     private static Map<String, String> resolveEffectiveOidcConfig(Map<String, String> props, String tenantDomain) {
 
-        String idpResourceId = props.get(DaonConstants.DAON_IDP_ID);
+        String idpResourceId = props.get(DaonConstants.ConnectionProperties.IDP_ID);
         if (StringUtils.isNotBlank(idpResourceId)) {
             return resolveOidcConfig(idpResourceId, tenantDomain);
         }
@@ -185,20 +184,32 @@ public final class DaonReferencedIdpUtil {
             return mappings;
         }
         IdentityProvider idp = resolveDaonIdp(idpResourceId, tenantDomain);
-        if (idp == null || idp.getClaimConfig() == null || idp.getClaimConfig().getClaimMappings() == null) {
+        if (idp == null || idp.getClaimConfig() == null) {
             return mappings;
         }
-        for (ClaimMapping claimMapping : idp.getClaimConfig().getClaimMappings()) {
-            if (claimMapping == null || claimMapping.getLocalClaim() == null
-                    || claimMapping.getRemoteClaim() == null) {
-                continue;
+        return DaonClaimMappingUtil.toClaimMap(idp.getClaimConfig().getClaimMappings());
+    }
+
+    /**
+     * The Daon connection name an association is keyed on: the referenced connection's when this is a login
+     * connection, otherwise the connection running the step.
+     *
+     * @param idpResourceId   the {@code daon_idp_id} property, blank for a self-contained connection.
+     * @param externalIdpName the name of the connection running the step, used when no reference is set.
+     * @return the connection name, or {@code null} if unresolvable.
+     */
+    public static String resolveDaonIdpName(String idpResourceId, String externalIdpName, String tenantDomain) {
+
+        if (StringUtils.isNotBlank(idpResourceId)) {
+            String referencedIdpName = resolveIdpName(idpResourceId, tenantDomain);
+            if (StringUtils.isBlank(referencedIdpName) && LOG.isDebugEnabled()) {
+                LOG.debug("Could not resolve the referenced Daon IDP name for resource id: " + idpResourceId);
             }
-            String localClaimUri = claimMapping.getLocalClaim().getClaimUri();
-            String remoteClaimUri = claimMapping.getRemoteClaim().getClaimUri();
-            if (StringUtils.isNotBlank(localClaimUri) && StringUtils.isNotBlank(remoteClaimUri)) {
-                mappings.put(localClaimUri, remoteClaimUri);
-            }
+            return referencedIdpName;
         }
-        return mappings;
+        if (StringUtils.isBlank(externalIdpName) && LOG.isDebugEnabled()) {
+            LOG.debug("No external IDP on the context; cannot resolve the Daon IDP name.");
+        }
+        return externalIdpName;
     }
 }

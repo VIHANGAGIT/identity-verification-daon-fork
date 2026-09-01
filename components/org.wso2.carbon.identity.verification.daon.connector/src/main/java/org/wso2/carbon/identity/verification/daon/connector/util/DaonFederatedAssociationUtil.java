@@ -21,6 +21,7 @@ package org.wso2.carbon.identity.verification.daon.connector.util;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.common.model.User;
 import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.flow.execution.engine.model.FlowUser;
@@ -83,6 +84,40 @@ public final class DaonFederatedAssociationUtil {
         }
         String resolved = resolveDomainQualifiedUsername(flowUser.getUserId(), tenantDomain);
         return resolved != null ? resolved : username;
+    }
+
+    /**
+     * Resolves the authenticating user's domain-qualified username.
+     *
+     * @return the qualified username, or {@code null} when the user carries none.
+     */
+    public static String resolveQualifiedUsername(AuthenticatedUser authenticatedUser) {
+
+        if (authenticatedUser == null || StringUtils.isBlank(authenticatedUser.getUserName())) {
+            return null;
+        }
+        String username = UserCoreUtil.removeDomainFromName(authenticatedUser.getUserName());
+        String userStoreDomain = authenticatedUser.getUserStoreDomain();
+        if (StringUtils.isNotBlank(userStoreDomain)) {
+            username = userStoreDomain + UserCoreConstants.DOMAIN_SEPARATOR + username;
+        }
+        return username;
+    }
+
+    /**
+     * The Daon subject the user is enrolled with on the given connection.
+     *
+     * @return the recorded subject, or {@code null} when the user is not enrolled.
+     */
+    public static String resolveEnrolledSubject(String qualifiedUsername, String tenantDomain, String idpName) {
+
+        if (StringUtils.isBlank(qualifiedUsername) || StringUtils.isBlank(idpName)) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Blank username or IDP name; cannot resolve the enrolled Daon subject.");
+            }
+            return null;
+        }
+        return getAssociatedDaonSubject(buildUser(qualifiedUsername, tenantDomain), idpName);
     }
 
     private static String resolveDomainQualifiedUsername(String userId, String tenantDomain) {

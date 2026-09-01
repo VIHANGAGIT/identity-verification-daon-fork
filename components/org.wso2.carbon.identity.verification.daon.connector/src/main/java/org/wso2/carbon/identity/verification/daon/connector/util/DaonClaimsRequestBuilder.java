@@ -31,22 +31,22 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIMS_PARAM;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_BIRTHDATE;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_DOCUMENT_CLASSIFICATION;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_DOCUMENT_DATE_OF_EXPIRY;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_DOCUMENT_NUMBER;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_DOCUMENT_PERSONAL_NUMBER;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_DOCUMENT_TYPE;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_FAMILY_NAME;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_FAMILY_NAME_AND_GIVEN_NAME;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_GIVEN_NAME;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIM_VALUE_MEMBER;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ID_TOKEN_CONTAINER;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.TRUST_FRAMEWORK;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.TRUST_FRAMEWORK_VALUE;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.VERIFICATION;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.VERIFIED_CLAIMS;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ClaimsRequest.ID_TOKEN_CONTAINER;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ClaimsRequest.TRUST_FRAMEWORK;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ClaimsRequest.TRUST_FRAMEWORK_VALUE;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ClaimsRequest.VALUE_MEMBER;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ClaimsRequest.VERIFICATION;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ClaimsRequest.VERIFIED_CLAIMS;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.BIRTHDATE;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.DOCUMENT_CLASSIFICATION;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.DOCUMENT_DATE_OF_EXPIRY;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.DOCUMENT_NUMBER;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.DOCUMENT_PERSONAL_NUMBER;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.DOCUMENT_TYPE;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.FAMILY_NAME;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.FAMILY_NAME_AND_GIVEN_NAME;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DaonClaims.GIVEN_NAME;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.OIDCParams.CLAIMS;
 
 /**
  * Builds the OIDC {@code claims} request parameter Daon expects for identity verification.
@@ -57,23 +57,23 @@ public final class DaonClaimsRequestBuilder {
      * Requested alongside the mapped claims, so document details come back regardless of configuration.
      */
     private static final List<String> DOCUMENT_CLAIMS = Arrays.asList(
-            CLAIM_DOCUMENT_TYPE,
-            CLAIM_DOCUMENT_CLASSIFICATION,
-            CLAIM_DOCUMENT_DATE_OF_EXPIRY,
-            CLAIM_DOCUMENT_NUMBER,
-            CLAIM_DOCUMENT_PERSONAL_NUMBER
+            DOCUMENT_TYPE,
+            DOCUMENT_CLASSIFICATION,
+            DOCUMENT_DATE_OF_EXPIRY,
+            DOCUMENT_NUMBER,
+            DOCUMENT_PERSONAL_NUMBER
     );
 
     /**
      * The only claims whose value-request proves anything.
      */
     private static final List<String> DOCUMENT_VERIFIABLE_CLAIMS = Arrays.asList(
-            CLAIM_GIVEN_NAME,
-            CLAIM_FAMILY_NAME,
-            CLAIM_FAMILY_NAME_AND_GIVEN_NAME,
-            CLAIM_BIRTHDATE,
-            CLAIM_DOCUMENT_NUMBER,
-            CLAIM_DOCUMENT_PERSONAL_NUMBER
+            GIVEN_NAME,
+            FAMILY_NAME,
+            FAMILY_NAME_AND_GIVEN_NAME,
+            BIRTHDATE,
+            DOCUMENT_NUMBER,
+            DOCUMENT_PERSONAL_NUMBER
     );
 
     private DaonClaimsRequestBuilder() {
@@ -117,9 +117,9 @@ public final class DaonClaimsRequestBuilder {
                 new ArrayList<>(daonClaimNames != null ? daonClaimNames : Collections.emptyList());
         // Some documents store the full name as a single field; without this fallback Daon would return
         // neither name claim for those.
-        if ((effectiveNames.contains(CLAIM_GIVEN_NAME) || effectiveNames.contains(CLAIM_FAMILY_NAME))
-                && !effectiveNames.contains(CLAIM_FAMILY_NAME_AND_GIVEN_NAME)) {
-            effectiveNames.add(CLAIM_FAMILY_NAME_AND_GIVEN_NAME);
+        if ((effectiveNames.contains(GIVEN_NAME) || effectiveNames.contains(FAMILY_NAME))
+                && !effectiveNames.contains(FAMILY_NAME_AND_GIVEN_NAME)) {
+            effectiveNames.add(FAMILY_NAME_AND_GIVEN_NAME);
         }
         for (String docClaim : DOCUMENT_CLAIMS) {
             if (!effectiveNames.contains(docClaim)) {
@@ -132,7 +132,7 @@ public final class DaonClaimsRequestBuilder {
             for (String claimName : effectiveNames) {
                 String value = values.get(claimName);
                 if (StringUtils.isNotBlank(value)) {
-                    claimsObj.put(claimName, new JSONObject().put(CLAIM_VALUE_MEMBER, value));
+                    claimsObj.put(claimName, new JSONObject().put(VALUE_MEMBER, value));
                 } else {
                     claimsObj.put(claimName, JSONObject.NULL);
                 }
@@ -140,7 +140,7 @@ public final class DaonClaimsRequestBuilder {
             JSONObject verification = new JSONObject().put(TRUST_FRAMEWORK, TRUST_FRAMEWORK_VALUE);
             JSONObject verifiedClaims = new JSONObject()
                     .put(VERIFICATION, verification)
-                    .put(CLAIMS_PARAM, claimsObj);
+                    .put(CLAIMS, claimsObj);
             JSONObject idToken = new JSONObject().put(VERIFIED_CLAIMS, verifiedClaims);
             return new JSONObject().put(ID_TOKEN_CONTAINER, idToken).toString();
         } catch (JSONException e) {

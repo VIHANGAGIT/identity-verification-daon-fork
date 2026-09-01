@@ -33,21 +33,20 @@ import org.wso2.carbon.identity.application.common.model.ClaimMapping;
 import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.model.User;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
-import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
+import org.wso2.carbon.identity.central.log.mgt.utils.LogConstants;
+import org.wso2.carbon.identity.central.log.mgt.utils.LoggerUtils;
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants;
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
 import org.wso2.carbon.identity.verification.daon.connector.exception.DaonExceptionMgt;
 import org.wso2.carbon.identity.verification.daon.connector.exception.DaonServerException;
-import org.wso2.carbon.identity.verification.daon.connector.internal.DaonConnectorDataHolder;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonCallbackErrors;
+import org.wso2.carbon.identity.verification.daon.connector.util.DaonClaimMappingUtil;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonClaimsRequestBuilder;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonFederatedAssociationUtil;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonJwtUtil;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonReferencedIdpUtil;
-import org.wso2.carbon.user.api.UserStoreException;
-import org.wso2.carbon.user.api.UserStoreManager;
-import org.wso2.carbon.user.core.UserCoreConstants;
-import org.wso2.carbon.user.core.util.UserCoreUtil;
+import org.wso2.carbon.identity.verification.daon.connector.util.DaonUserClaimReader;
+import org.wso2.carbon.utils.DiagnosticLog;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,11 +58,16 @@ import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ACR_VALUES_PARAM;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_ENROL_PD;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_IDP_ID;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_LOGIN_PD;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LOGIN_HINT;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.ENROL_PD;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.IDP_ID;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.LOGIN_PD;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ContextProperties.ENROLLING_USER;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ContextProperties.ENROLLING_USER_TENANT;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ContextProperties.EXPECTED_SUBJECT;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LogConstants.ActionIDs.BIND_VERIFIED_IDENTITY;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LogConstants.OUTBOUND_AUTH_DAON_SERVICE;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.OIDCParams.ACR_VALUES;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.OIDCParams.LOGIN_HINT;
 
 /**
  * Daon TrustX federated authenticator (login step).
@@ -119,7 +123,7 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
                     + ", runtime parameters from the adaptive script: " + runtimeParams.keySet());
         }
 
-        if (Boolean.parseBoolean(runtimeParams.get(DaonConstants.DAON_RUNTIME_PARAM_ENROL))) {
+        if (Boolean.parseBoolean(runtimeParams.get(DaonConstants.RuntimeParams.ENROL))) {
             if (daonSubject != null) {
                 LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_ALREADY_ENROLLED,
                         resolveDaonIdpName(context)));
@@ -137,8 +141,8 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             return;
         }
         // Remember the identity this request is asking Daon to verify, so the callback can be bound to it.
-        context.setProperty(DaonConstants.DAON_EXPECTED_SUBJECT, daonSubject);
-        addDaonQueryParams(props, props.get(DAON_LOGIN_PD), daonSubject, null);
+        context.setProperty(EXPECTED_SUBJECT, daonSubject);
+        addDaonQueryParams(props, props.get(LOGIN_PD), daonSubject, null);
         super.initiateAuthenticationRequest(request, response, context);
     }
 
@@ -146,14 +150,14 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
                                           AuthenticationContext context, Map<String, String> props)
             throws AuthenticationFailedException {
 
-        String enrolProcessDefinition = props.get(DAON_ENROL_PD);
+        String enrolProcessDefinition = props.get(ENROL_PD);
         if (StringUtils.isBlank(enrolProcessDefinition)) {
             LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_ENROL_PD_NOT_CONFIGURED));
             failRequest(request, response, context, ErrorMessage.ERROR_ENROL_PD_NOT_CONFIGURED);
             return;
         }
         AuthenticatedUser authenticatedUser = context.getLastAuthenticatedUser();
-        String qualifiedUsername = resolveQualifiedUsername(authenticatedUser);
+        String qualifiedUsername = DaonFederatedAssociationUtil.resolveQualifiedUsername(authenticatedUser);
         if (StringUtils.isBlank(qualifiedUsername)) {
             LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_PERSISTING_FED_ASSOCIATION,
                     "the authenticating user could not be resolved at the login step"));
@@ -190,8 +194,8 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             LOG.debug("Enrolling a user with no Daon enrolment at the login step, using the enrol process "
                     + "definition: " + enrolProcessDefinition);
         }
-        context.setProperty(DaonConstants.DAON_ENROLLING_USER, qualifiedUsername);
-        context.setProperty(DaonConstants.DAON_ENROLLING_USER_TENANT,
+        context.setProperty(ENROLLING_USER, qualifiedUsername);
+        context.setProperty(ENROLLING_USER_TENANT,
                 resolveUserTenantDomain(authenticatedUser, context));
         addDaonQueryParams(props, enrolProcessDefinition, null, claimsRequest);
         super.initiateAuthenticationRequest(request, response, context);
@@ -205,7 +209,7 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
         // Handle OAuth2 error on cancellations and failures, before the parent tries to read a code off the callback.
         String error = request.getParameter(OIDCAuthenticatorConstants.OAUTH2_ERROR);
         if (StringUtils.isNotBlank(error)) {
-            String errorDescription = request.getParameter(DaonConstants.OAUTH2_ERROR_DESCRIPTION);
+            String errorDescription = request.getParameter(DaonConstants.OIDCParams.ERROR_DESCRIPTION);
             ErrorMessage callbackError = DaonCallbackErrors.resolveError(error, errorDescription);
             if (LOG.isDebugEnabled()) {
                 LOG.debug(callbackError.getCode() + " - Daon returned an error on the login callback. error="
@@ -222,12 +226,12 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
         }
         super.processAuthenticationResponse(request, response, context);
         // The context outlives the request. Prevents a stale marker from skipping the identity binding check below.
-        String enrollingUser = (String) context.getProperty(DaonConstants.DAON_ENROLLING_USER);
-        String enrollingUserTenant = (String) context.getProperty(DaonConstants.DAON_ENROLLING_USER_TENANT);
-        String expectedSubject = (String) context.getProperty(DaonConstants.DAON_EXPECTED_SUBJECT);
-        context.removeProperty(DaonConstants.DAON_ENROLLING_USER);
-        context.removeProperty(DaonConstants.DAON_ENROLLING_USER_TENANT);
-        context.removeProperty(DaonConstants.DAON_EXPECTED_SUBJECT);
+        String enrollingUser = (String) context.getProperty(ENROLLING_USER);
+        String enrollingUserTenant = (String) context.getProperty(ENROLLING_USER_TENANT);
+        String expectedSubject = (String) context.getProperty(EXPECTED_SUBJECT);
+        context.removeProperty(ENROLLING_USER);
+        context.removeProperty(ENROLLING_USER_TENANT);
+        context.removeProperty(EXPECTED_SUBJECT);
 
         if (StringUtils.isNotBlank(enrollingUser)) {
             persistEnrolment(context, enrollingUser, enrollingUserTenant);
@@ -243,7 +247,7 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
         String tenantDomain = StringUtils.isNotBlank(userTenantDomain)
                 ? userTenantDomain : context.getTenantDomain();
 
-        String daonSubject = getClaimValue(context.getSubject(), DaonConstants.JWT_PREFERRED_USERNAME_CLAIM);
+        String daonSubject = getClaimValue(context.getSubject(), DaonConstants.IdTokenClaims.PREFERRED_USERNAME);
         if (StringUtils.isBlank(daonSubject)) {
             LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_ENROLMENT_IDENTITY_NOT_RETURNED));
             throw failCallback(context, ErrorMessage.ERROR_ENROLMENT_IDENTITY_NOT_RETURNED);
@@ -269,6 +273,22 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
         if (LOG.isDebugEnabled()) {
             LOG.debug("Recorded the Daon enrolment performed at the login step, for IDP: " + daonIdpName);
         }
+        if (LoggerUtils.isDiagnosticLogsEnabled()) {
+            DiagnosticLog.DiagnosticLogBuilder diagnosticLogBuilder = new DiagnosticLog.DiagnosticLogBuilder(
+                    getComponentId(), BIND_VERIFIED_IDENTITY);
+            diagnosticLogBuilder.resultStatus(DiagnosticLog.ResultStatus.SUCCESS)
+                    .logDetailLevel(DiagnosticLog.LogDetailLevel.APPLICATION)
+                    .resultMessage("Bound the identity Daon verified to the authenticating user.")
+                    .inputParam(LogConstants.InputKeys.IDP, daonIdpName)
+                    .inputParam(LogConstants.InputKeys.TENANT_DOMAIN, tenantDomain);
+            LoggerUtils.triggerDiagnosticLogEvent(diagnosticLogBuilder);
+        }
+    }
+
+    @Override
+    protected String getComponentId() {
+
+        return OUTBOUND_AUTH_DAON_SERVICE;
     }
 
     /*
@@ -278,15 +298,20 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             throws AuthenticationFailedException {
 
         String preferredUsername =
-                getClaimValue(context.getSubject(), DaonConstants.JWT_PREFERRED_USERNAME_CLAIM);
+                getClaimValue(context.getSubject(), DaonConstants.IdTokenClaims.PREFERRED_USERNAME);
 
         if (DaonJwtUtil.isExpectedSubject(expectedSubject, preferredUsername)) {
             return;
         }
         if (LOG.isDebugEnabled()) {
+            // The Daon subject identifies a person; mask it unless an operator has turned masking off.
             LOG.debug(ErrorMessage.ERROR_LOGIN_IDENTITY_MISMATCH.getCode()
                     + " - Daon verified an identity that does not match the authenticating user. Expected: "
-                    + expectedSubject + ", returned preferred_username: " + preferredUsername);
+                    + (LoggerUtils.isLogMaskingEnable
+                            ? LoggerUtils.getMaskedContent(expectedSubject) : expectedSubject)
+                    + ", returned preferred_username: "
+                    + (LoggerUtils.isLogMaskingEnable
+                            ? LoggerUtils.getMaskedContent(preferredUsername) : preferredUsername));
         }
         LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_LOGIN_IDENTITY_MISMATCH));
         throw failCallback(context, ErrorMessage.ERROR_LOGIN_IDENTITY_MISMATCH);
@@ -318,7 +343,7 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
     protected String getAuthenticateUser(AuthenticationContext context, Map<String, Object> oidcClaims,
                                          OAuthClientResponse oidcResponse) {
 
-        Object preferredUsername = oidcClaims.get(DaonConstants.JWT_PREFERRED_USERNAME_CLAIM);
+        Object preferredUsername = oidcClaims.get(DaonConstants.IdTokenClaims.PREFERRED_USERNAME);
         if (preferredUsername != null && StringUtils.isNotBlank(preferredUsername.toString())) {
             return preferredUsername.toString();
         }
@@ -343,15 +368,15 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
         properties.add(buildProperty(IdentityApplicationConstants.Authenticator.OIDC.SCOPES, "Scopes", false,
                 "OIDC scopes to request from Daon, e.g. openid profile document "
                         + "(self-contained Identity Verifier connection).", 4));
-        properties.add(buildProperty(DAON_IDP_ID, "Daon Verifier ID", false,
+        properties.add(buildProperty(IDP_ID, "Daon Verifier ID", false,
                 "Resource ID (UUID) of the Daon Identity Verifier connection whose OIDC client "
                         + "credentials and endpoints a login connection uses. Leave blank for a "
                         + "self-contained Identity Verifier connection.", 5));
-        properties.add(buildProperty(DAON_ENROL_PD, "Enrol Process Definition", false,
+        properties.add(buildProperty(ENROL_PD, "Enrol Process Definition", false,
                 "Daon process definition for the enrolment flows (registration and invited-user), as "
                         + "<ProcessDefinitionName:Version>, sent as acr_values "
                         + "(self-contained Identity Verifier connection).", 6));
-        properties.add(buildProperty(DAON_LOGIN_PD, "Login Process Definition", false,
+        properties.add(buildProperty(LOGIN_PD, "Login Process Definition", false,
                 "Daon process definition for the login and password-recovery (re-verification) flows, as "
                         + "<ProcessDefinitionName:Version>, sent as acr_values (login connection).", 7));
         return properties;
@@ -387,53 +412,34 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             queryParams.add(configuredQueryParams);
         }
         if (StringUtils.isNotBlank(processDefinition)) {
-            queryParams.add(ACR_VALUES_PARAM + QUERY_PARAM_ASSIGNMENT + processDefinition);
+            queryParams.add(ACR_VALUES + QUERY_PARAM_ASSIGNMENT + processDefinition);
         }
         if (StringUtils.isNotBlank(loginHint)) {
             queryParams.add(LOGIN_HINT + QUERY_PARAM_ASSIGNMENT + loginHint);
         }
         if (StringUtils.isNotBlank(claimsRequest)) {
-            queryParams.add(DaonConstants.CLAIMS_PARAM + QUERY_PARAM_ASSIGNMENT + claimsRequest);
+            queryParams.add(DaonConstants.OIDCParams.CLAIMS + QUERY_PARAM_ASSIGNMENT + claimsRequest);
         }
         props.put(FrameworkConstants.QUERY_PARAMS, String.join(QUERY_PARAM_SEPARATOR, queryParams));
     }
 
+    /*
+     * Attribute mappings live on the Daon Identity Verifier connection alone: a login connection references
+     * one, so its own mappings are never read.
+     */
     private Map<String, String> resolveClaimMappings(AuthenticationContext context) {
 
-        Map<String, String> mappings = readClaimMappings(
-                context.getExternalIdP() != null ? context.getExternalIdP().getClaimMappings() : null);
-        if (!mappings.isEmpty()) {
-            return mappings;
-        }
-        String idpResourceId = context.getAuthenticatorProperties().get(DAON_IDP_ID);
+        String idpResourceId = context.getAuthenticatorProperties().get(IDP_ID);
         if (StringUtils.isBlank(idpResourceId)) {
-            return mappings;
+            // A self-contained Identity Verifier connection carries its own mappings.
+            return DaonClaimMappingUtil.toClaimMap(
+                    context.getExternalIdP() != null ? context.getExternalIdP().getClaimMappings() : null);
         }
-        mappings = DaonReferencedIdpUtil.resolveClaimMappings(idpResourceId, context.getTenantDomain());
+        Map<String, String> mappings =
+                DaonReferencedIdpUtil.resolveClaimMappings(idpResourceId, context.getTenantDomain());
         if (LOG.isDebugEnabled()) {
-            LOG.debug("The login connection has no attribute mappings of its own; using the "
-                    + mappings.size() + " mapping(s) of the referenced Daon Identity Verifier for the "
-                    + "enrolment claim value-requests.");
-        }
-        return mappings;
-    }
-
-    private Map<String, String> readClaimMappings(ClaimMapping[] claimMappings) {
-
-        Map<String, String> mappings = new HashMap<>();
-        if (claimMappings == null) {
-            return mappings;
-        }
-        for (ClaimMapping claimMapping : claimMappings) {
-            if (claimMapping == null || claimMapping.getLocalClaim() == null
-                    || claimMapping.getRemoteClaim() == null) {
-                continue;
-            }
-            String localClaimUri = claimMapping.getLocalClaim().getClaimUri();
-            String remoteClaimUri = claimMapping.getRemoteClaim().getClaimUri();
-            if (StringUtils.isNotBlank(localClaimUri) && StringUtils.isNotBlank(remoteClaimUri)) {
-                mappings.put(localClaimUri, remoteClaimUri);
-            }
+            LOG.debug("Using the " + mappings.size() + " attribute mapping(s) of the referenced Daon "
+                    + "Identity Verifier for the enrolment claim value-requests.");
         }
         return mappings;
     }
@@ -457,65 +463,32 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             }
         }
         if (!unresolved.isEmpty()) {
-            localValues.putAll(readStoredClaims(resolveUserTenantDomain(authenticatedUser, context),
-                    qualifiedUsername, unresolved));
+            localValues.putAll(DaonUserClaimReader.readByUsername(
+                    resolveUserTenantDomain(authenticatedUser, context), qualifiedUsername, unresolved,
+                    "the user being enrolled at the login step"));
         }
+        return removeQueryUnsafeValues(DaonClaimMappingUtil.toDaonClaimValues(claimMappings, localValues));
+    }
 
-        Map<String, String> valuesByDaonClaimName = new HashMap<>();
-        for (Map.Entry<String, String> mapping : claimMappings.entrySet()) {
-            String value = localValues.get(mapping.getKey());
-            if (StringUtils.isBlank(value)) {
-                continue;
+    /*
+     * The authorization request carries the value-requests as raw additional query parameters, so a value
+     * holding a separator would corrupt the request rather than reach Daon.
+     */
+    private Map<String, String> removeQueryUnsafeValues(Map<String, String> valuesByDaonClaimName) {
+
+        valuesByDaonClaimName.entrySet().removeIf(entry -> {
+            String value = entry.getValue();
+            if (!value.contains(QUERY_PARAM_SEPARATOR) && !value.contains(QUERY_PARAM_ASSIGNMENT)) {
+                return false;
             }
-            value = value.trim();
-            if (value.contains(QUERY_PARAM_SEPARATOR) || value.contains(QUERY_PARAM_ASSIGNMENT)) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Skipping the Daon claim value-request for '" + mapping.getValue()
-                            + "': the value contains a character the authorization request's additional "
-                            + "query parameters cannot carry.");
-                }
-                continue;
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Skipping the Daon claim value-request for '" + entry.getKey()
+                        + "': the value contains a character the authorization request's additional "
+                        + "query parameters cannot carry.");
             }
-            valuesByDaonClaimName.put(mapping.getValue(), value);
-        }
+            return true;
+        });
         return valuesByDaonClaimName;
-    }
-
-    private Map<String, String> readStoredClaims(String tenantDomain, String qualifiedUsername,
-                                                 List<String> claimUris) {
-
-        Map<String, String> values = new HashMap<>();
-        try {
-            int tenantId = IdentityTenantUtil.getTenantId(tenantDomain);
-            UserStoreManager userStoreManager = DaonConnectorDataHolder.getRealmService()
-                    .getTenantUserRealm(tenantId).getUserStoreManager();
-            Map<String, String> storedClaims = userStoreManager.getUserClaimValues(qualifiedUsername,
-                    claimUris.toArray(new String[0]), null);
-            if (storedClaims != null) {
-                for (Map.Entry<String, String> claim : storedClaims.entrySet()) {
-                    if (StringUtils.isNotBlank(claim.getValue())) {
-                        values.put(claim.getKey(), claim.getValue());
-                    }
-                }
-            }
-        } catch (UserStoreException e) {
-            LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_READING_USER_CLAIMS,
-                    "the user being enrolled at the login step"), e);
-        }
-        return values;
-    }
-
-    private String resolveQualifiedUsername(AuthenticatedUser authenticatedUser) {
-
-        if (authenticatedUser == null || StringUtils.isBlank(authenticatedUser.getUserName())) {
-            return null;
-        }
-        String username = UserCoreUtil.removeDomainFromName(authenticatedUser.getUserName());
-        String userStoreDomain = authenticatedUser.getUserStoreDomain();
-        if (StringUtils.isNotBlank(userStoreDomain)) {
-            username = userStoreDomain + UserCoreConstants.DOMAIN_SEPARATOR + username;
-        }
-        return username;
     }
 
     private String resolveDaonSubject(AuthenticationContext context) {
@@ -534,16 +507,15 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             }
             return null;
         }
-        String username = resolveQualifiedUsername(authenticatedUser);
+        String username = DaonFederatedAssociationUtil.resolveQualifiedUsername(authenticatedUser);
         if (StringUtils.isBlank(username)) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("The last authenticated user carries no username; cannot resolve the Daon subject.");
             }
             return null;
         }
-        User associationUser = DaonFederatedAssociationUtil.buildUser(username,
-                resolveUserTenantDomain(authenticatedUser, context));
-        return DaonFederatedAssociationUtil.getAssociatedDaonSubject(associationUser, daonIdpName);
+        return DaonFederatedAssociationUtil.resolveEnrolledSubject(username,
+                resolveUserTenantDomain(authenticatedUser, context), daonIdpName);
     }
 
     private String resolveUserTenantDomain(AuthenticatedUser authenticatedUser,
@@ -557,24 +529,10 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
 
     private String resolveDaonIdpName(AuthenticationContext context) {
 
-        String idpResourceId = context.getAuthenticatorProperties().get(DAON_IDP_ID);
-        if (StringUtils.isNotBlank(idpResourceId)) {
-            String referencedIdpName =
-                    DaonReferencedIdpUtil.resolveIdpName(idpResourceId, context.getTenantDomain());
-            if (StringUtils.isBlank(referencedIdpName)) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Could not resolve the referenced Daon IDP name for resource id: " + idpResourceId);
-                }
-            }
-            return referencedIdpName;
-        }
-        if (context.getExternalIdP() == null) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("No external IDP in the authentication context; cannot resolve the Daon IDP name.");
-            }
-            return null;
-        }
-        return context.getExternalIdP().getIdPName();
+        return DaonReferencedIdpUtil.resolveDaonIdpName(
+                context.getAuthenticatorProperties().get(IDP_ID),
+                context.getExternalIdP() != null ? context.getExternalIdP().getIdPName() : null,
+                context.getTenantDomain());
     }
 
     private void setErrorInformation(AuthenticationContext context, ErrorMessage error) {
@@ -583,19 +541,12 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
         context.setProperty(FrameworkConstants.AUTH_ERROR_MSG, error.getMessage());
     }
 
-    private boolean isAdaptiveScriptDriven(AuthenticationContext context) {
-
-        return context.getSequenceConfig() != null
-                && context.getSequenceConfig().getAuthenticationGraph() != null
-                && context.getSequenceConfig().getAuthenticationGraph().isEnabled();
-    }
-
     private void failRequest(HttpServletRequest request, HttpServletResponse response,
                              AuthenticationContext context, ErrorMessage error)
             throws AuthenticationFailedException {
 
         setErrorInformation(context, error);
-        if (isAdaptiveScriptDriven(context)) {
+        if (Boolean.parseBoolean(getRuntimeParams(context).get(DaonConstants.RuntimeParams.ENROL))) {
             throw DaonExceptionMgt.handleAuthFailedException(error);
         }
         try {

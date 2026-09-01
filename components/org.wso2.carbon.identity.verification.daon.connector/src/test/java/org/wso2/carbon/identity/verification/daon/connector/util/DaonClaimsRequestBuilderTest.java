@@ -41,49 +41,49 @@ public class DaonClaimsRequestBuilderTest {
     private JSONObject claimsOf(String claimsParam) {
 
         return new JSONObject(claimsParam)
-                .getJSONObject(DaonConstants.ID_TOKEN_CONTAINER)
-                .getJSONObject(DaonConstants.VERIFIED_CLAIMS)
-                .getJSONObject(DaonConstants.CLAIMS_PARAM);
+                .getJSONObject(DaonConstants.ClaimsRequest.ID_TOKEN_CONTAINER)
+                .getJSONObject(DaonConstants.ClaimsRequest.VERIFIED_CLAIMS)
+                .getJSONObject(DaonConstants.OIDCParams.CLAIMS);
     }
 
     @Test
     public void testKnownValuesAreSentAsValueRequests() throws Exception {
 
         Map<String, String> values = new HashMap<>();
-        values.put(DaonConstants.CLAIM_GIVEN_NAME, "JOHN");
+        values.put(DaonConstants.DaonClaims.GIVEN_NAME, "JOHN");
 
         JSONObject claims = claimsOf(DaonClaimsRequestBuilder.buildClaimsParam(
-                Arrays.asList(DaonConstants.CLAIM_GIVEN_NAME, DaonConstants.CLAIM_FAMILY_NAME), values));
+                Arrays.asList(DaonConstants.DaonClaims.GIVEN_NAME, DaonConstants.DaonClaims.FAMILY_NAME), values));
 
-        assertEquals(claims.getJSONObject(DaonConstants.CLAIM_GIVEN_NAME)
-                .getString(DaonConstants.CLAIM_VALUE_MEMBER), "JOHN");
+        assertEquals(claims.getJSONObject(DaonConstants.DaonClaims.GIVEN_NAME)
+                .getString(DaonConstants.ClaimsRequest.VALUE_MEMBER), "JOHN");
         // A claim with no known value is requested without a value, so Daon returns it verified.
-        assertTrue(claims.isNull(DaonConstants.CLAIM_FAMILY_NAME));
+        assertTrue(claims.isNull(DaonConstants.DaonClaims.FAMILY_NAME));
     }
 
     @Test
     public void testRequestedUnderTheExpectedTrustFramework() throws Exception {
 
         String claimsParam = DaonClaimsRequestBuilder.buildClaimsParam(
-                Collections.singletonList(DaonConstants.CLAIM_GIVEN_NAME), Collections.emptyMap());
+                Collections.singletonList(DaonConstants.DaonClaims.GIVEN_NAME), Collections.emptyMap());
 
         assertEquals(new JSONObject(claimsParam)
-                        .getJSONObject(DaonConstants.ID_TOKEN_CONTAINER)
-                        .getJSONObject(DaonConstants.VERIFIED_CLAIMS)
-                        .getJSONObject(DaonConstants.VERIFICATION)
-                        .getString(DaonConstants.TRUST_FRAMEWORK),
-                DaonConstants.TRUST_FRAMEWORK_VALUE);
+                        .getJSONObject(DaonConstants.ClaimsRequest.ID_TOKEN_CONTAINER)
+                        .getJSONObject(DaonConstants.ClaimsRequest.VERIFIED_CLAIMS)
+                        .getJSONObject(DaonConstants.ClaimsRequest.VERIFICATION)
+                        .getString(DaonConstants.ClaimsRequest.TRUST_FRAMEWORK),
+                DaonConstants.ClaimsRequest.TRUST_FRAMEWORK_VALUE);
     }
 
     @Test
     public void testNameFallbackAndDocumentClaimsAreAlwaysRequested() throws Exception {
 
         JSONObject claims = claimsOf(DaonClaimsRequestBuilder.buildClaimsParam(
-                Collections.singletonList(DaonConstants.CLAIM_GIVEN_NAME), Collections.emptyMap()));
+                Collections.singletonList(DaonConstants.DaonClaims.GIVEN_NAME), Collections.emptyMap()));
 
-        assertTrue(claims.has(DaonConstants.CLAIM_FAMILY_NAME_AND_GIVEN_NAME));
-        assertTrue(claims.has(DaonConstants.CLAIM_DOCUMENT_NUMBER));
-        assertTrue(claims.has(DaonConstants.CLAIM_DOCUMENT_TYPE));
+        assertTrue(claims.has(DaonConstants.DaonClaims.FAMILY_NAME_AND_GIVEN_NAME));
+        assertTrue(claims.has(DaonConstants.DaonClaims.DOCUMENT_NUMBER));
+        assertTrue(claims.has(DaonConstants.DaonClaims.DOCUMENT_TYPE));
     }
 
     /**
@@ -94,15 +94,15 @@ public class DaonClaimsRequestBuilderTest {
     public void testDocumentVerifiableValuesAreRecognised() {
 
         assertTrue(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(
-                Collections.singletonMap(DaonConstants.CLAIM_GIVEN_NAME, "JOHN")));
+                Collections.singletonMap(DaonConstants.DaonClaims.GIVEN_NAME, "JOHN")));
         assertTrue(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(
-                Collections.singletonMap(DaonConstants.CLAIM_FAMILY_NAME, "SMITH")));
+                Collections.singletonMap(DaonConstants.DaonClaims.FAMILY_NAME, "SMITH")));
         assertTrue(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(
-                Collections.singletonMap(DaonConstants.CLAIM_FAMILY_NAME_AND_GIVEN_NAME, "SMITH^JOHN")));
+                Collections.singletonMap(DaonConstants.DaonClaims.FAMILY_NAME_AND_GIVEN_NAME, "SMITH^JOHN")));
         assertTrue(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(
-                Collections.singletonMap(DaonConstants.CLAIM_BIRTHDATE, "1990-01-01")));
+                Collections.singletonMap(DaonConstants.DaonClaims.BIRTHDATE, "1990-01-01")));
         assertTrue(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(
-                Collections.singletonMap(DaonConstants.CLAIM_DOCUMENT_NUMBER, "P1234567")));
+                Collections.singletonMap(DaonConstants.DaonClaims.DOCUMENT_NUMBER, "P1234567")));
     }
 
     /**
@@ -123,7 +123,7 @@ public class DaonClaimsRequestBuilderTest {
     public void testBlankAndEmptyValuesDoNotCount() {
 
         assertFalse(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(
-                Collections.singletonMap(DaonConstants.CLAIM_GIVEN_NAME, "   ")));
+                Collections.singletonMap(DaonConstants.DaonClaims.GIVEN_NAME, "   ")));
         assertFalse(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(Collections.emptyMap()));
         assertFalse(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(null));
     }
@@ -138,12 +138,12 @@ public class DaonClaimsRequestBuilderTest {
         List<String> exposed = DaonClaimsRequestBuilder.getDocumentVerifiableClaims();
 
         assertEquals(exposed, Arrays.asList(
-                DaonConstants.CLAIM_GIVEN_NAME,
-                DaonConstants.CLAIM_FAMILY_NAME,
-                DaonConstants.CLAIM_FAMILY_NAME_AND_GIVEN_NAME,
-                DaonConstants.CLAIM_BIRTHDATE,
-                DaonConstants.CLAIM_DOCUMENT_NUMBER,
-                DaonConstants.CLAIM_DOCUMENT_PERSONAL_NUMBER));
+                DaonConstants.DaonClaims.GIVEN_NAME,
+                DaonConstants.DaonClaims.FAMILY_NAME,
+                DaonConstants.DaonClaims.FAMILY_NAME_AND_GIVEN_NAME,
+                DaonConstants.DaonClaims.BIRTHDATE,
+                DaonConstants.DaonClaims.DOCUMENT_NUMBER,
+                DaonConstants.DaonClaims.DOCUMENT_PERSONAL_NUMBER));
         for (String claimName : exposed) {
             assertTrue(DaonClaimsRequestBuilder.hasDocumentVerifiableValue(
                     Collections.singletonMap(claimName, "some-value")), claimName + " must count");
@@ -153,6 +153,6 @@ public class DaonClaimsRequestBuilderTest {
     @Test(expectedExceptions = UnsupportedOperationException.class)
     public void testDocumentVerifiableClaimsCannotBeMutatedByCallers() {
 
-        DaonClaimsRequestBuilder.getDocumentVerifiableClaims().add(DaonConstants.CLAIM_ADDRESS);
+        DaonClaimsRequestBuilder.getDocumentVerifiableClaims().add(DaonConstants.DaonClaims.ADDRESS);
     }
 }

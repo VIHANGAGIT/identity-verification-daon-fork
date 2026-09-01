@@ -27,10 +27,4 @@
         </Or>
     </Match>
 
-    <Match>
-        <Class name="org.wso2.carbon.identity.verification.daon.connector.DaonExecutor"/>
-        <Method name="buildPortalUrl"/>
-        <Bug pattern="REC_CATCH_EXCEPTION"/>
-    </Match>
-
 </FindBugsFilter>

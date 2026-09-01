@@ -99,8 +99,8 @@ public class DaonReferencedIdpUtilTest {
     private Map<String, String> referencingProps() {
 
         Map<String, String> props = new HashMap<>();
-        props.put(DaonConstants.DAON_IDP_ID, IDP_RESOURCE_ID);
-        props.put(DaonConstants.DAON_LOGIN_PD, "LoginProcess:1");
+        props.put(DaonConstants.ConnectionProperties.IDP_ID, IDP_RESOURCE_ID);
+        props.put(DaonConstants.ConnectionProperties.LOGIN_PD, "LoginProcess:1");
         return props;
     }
 
@@ -115,7 +115,7 @@ public class DaonReferencedIdpUtilTest {
         assertEquals(effective.get("ClientId"), "daon-client");
         assertEquals(effective.get("OAuth2TokenEPUrl"), "https://daon.example.com/token");
         // The login process definition belongs to the login connection and must survive the layering.
-        assertEquals(effective.get(DaonConstants.DAON_LOGIN_PD), "LoginProcess:1");
+        assertEquals(effective.get(DaonConstants.ConnectionProperties.LOGIN_PD), "LoginProcess:1");
         assertEquals(DaonReferencedIdpUtil.resolveIdpName(IDP_RESOURCE_ID, TENANT_DOMAIN), DAON_IDP_NAME);
     }
 
@@ -172,8 +172,8 @@ public class DaonReferencedIdpUtilTest {
         Map<String, String> effective =
                 DaonReferencedIdpUtil.buildEffectiveProperties(referencingProps(), TENANT_DOMAIN);
 
-        assertEquals(effective.get(DaonConstants.DAON_IDP_ID), IDP_RESOURCE_ID);
-        assertEquals(effective.get(DaonConstants.DAON_LOGIN_PD), "LoginProcess:1");
+        assertEquals(effective.get(DaonConstants.ConnectionProperties.IDP_ID), IDP_RESOURCE_ID);
+        assertEquals(effective.get(DaonConstants.ConnectionProperties.LOGIN_PD), "LoginProcess:1");
         assertFalse(effective.containsKey("ClientId"));
     }
 
@@ -188,7 +188,7 @@ public class DaonReferencedIdpUtilTest {
                 property("ClientId", "stock-oidc-client"));
         FederatedAuthenticatorConfig daonConfig = authenticatorConfig(DaonConstants.AUTHENTICATOR_NAME,
                 property("ClientId", "daon-client"),
-                property(DaonConstants.DAON_ENROL_PD, "EnrolProcess:2"));
+                property(DaonConstants.ConnectionProperties.ENROL_PD, "EnrolProcess:2"));
 
         IdentityProvider idp = new IdentityProvider();
         idp.setIdentityProviderName(DAON_IDP_NAME);
@@ -201,7 +201,7 @@ public class DaonReferencedIdpUtilTest {
                 DaonReferencedIdpUtil.buildEffectiveProperties(referencingProps(), TENANT_DOMAIN);
 
         assertEquals(effective.get("ClientId"), "daon-client");
-        assertEquals(effective.get(DaonConstants.DAON_ENROL_PD), "EnrolProcess:2");
+        assertEquals(effective.get(DaonConstants.ConnectionProperties.ENROL_PD), "EnrolProcess:2");
     }
 
     /**
@@ -216,13 +216,13 @@ public class DaonReferencedIdpUtilTest {
 
         Map<String, String> ownProps = new HashMap<>();
         ownProps.put("ClientId", "own-client");
-        ownProps.put(DaonConstants.DAON_ENROL_PD, "EnrolProcess:1");
+        ownProps.put(DaonConstants.ConnectionProperties.ENROL_PD, "EnrolProcess:1");
 
         Map<String, String> effective =
                 DaonReferencedIdpUtil.buildEffectiveProperties(ownProps, TENANT_DOMAIN);
 
         assertEquals(effective.get("ClientId"), "own-client");
-        assertEquals(effective.get(DaonConstants.DAON_ENROL_PD), "EnrolProcess:1");
+        assertEquals(effective.get(DaonConstants.ConnectionProperties.ENROL_PD), "EnrolProcess:1");
         Mockito.verifyNoInteractions(idpManager);
     }
 

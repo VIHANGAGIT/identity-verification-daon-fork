@@ -27,10 +27,8 @@ import org.json.JSONObject;
 import org.wso2.carbon.identity.application.authentication.framework.config.model.ExternalIdPConfig;
 import org.wso2.carbon.identity.application.authenticator.oidc.OIDCAuthenticatorConstants;
 import org.wso2.carbon.identity.application.authenticator.oidc.OpenIDConnectExecutor;
-import org.wso2.carbon.identity.application.common.model.ClaimMapping;
-import org.wso2.carbon.identity.application.common.model.User;
-import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
-import org.wso2.carbon.identity.core.util.IdentityUtil;
+import org.wso2.carbon.identity.central.log.mgt.utils.LogConstants;
+import org.wso2.carbon.identity.central.log.mgt.utils.LoggerUtils;
 import org.wso2.carbon.identity.flow.execution.engine.Constants;
 import org.wso2.carbon.identity.flow.execution.engine.exception.FlowEngineException;
 import org.wso2.carbon.identity.flow.execution.engine.metadata.FlowExecutorMetadata;
@@ -38,23 +36,19 @@ import org.wso2.carbon.identity.flow.execution.engine.model.ExecutorResponse;
 import org.wso2.carbon.identity.flow.execution.engine.model.FlowExecutionContext;
 import org.wso2.carbon.identity.flow.execution.engine.model.FlowUser;
 import org.wso2.carbon.identity.flow.mgt.Constants.FlowTypes;
-import org.wso2.carbon.identity.organization.management.service.OrganizationManager;
-import org.wso2.carbon.identity.organization.management.service.util.OrganizationManagementUtil;
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants;
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
 import org.wso2.carbon.identity.verification.daon.connector.exception.DaonException;
 import org.wso2.carbon.identity.verification.daon.connector.exception.DaonExceptionMgt;
 import org.wso2.carbon.identity.verification.daon.connector.exception.DaonServerException;
-import org.wso2.carbon.identity.verification.daon.connector.internal.DaonConnectorDataHolder;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonCallbackErrors;
+import org.wso2.carbon.identity.verification.daon.connector.util.DaonClaimMappingUtil;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonClaimsRequestBuilder;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonFederatedAssociationUtil;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonJwtUtil;
 import org.wso2.carbon.identity.verification.daon.connector.util.DaonReferencedIdpUtil;
-import org.wso2.carbon.user.api.UserStoreException;
-import org.wso2.carbon.user.api.UserStoreManager;
-import org.wso2.carbon.user.core.UniqueIDUserStoreManager;
-import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
+import org.wso2.carbon.identity.verification.daon.connector.util.DaonUserClaimReader;
+import org.wso2.carbon.utils.DiagnosticLog;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,23 +59,22 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ACR_VALUES_PARAM;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.CLAIMS_PARAM;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_CLAIMS_REQUEST;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_ENROL_PD;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_FED_IDP_NAME;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_FED_SUBJECT;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_IDP_ID;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_LOGIN_HINT;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_LOGIN_PD;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.DAON_SELECTED_PD;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FLOW_TYPE_INVITED_USER_REGISTRATION;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FLOW_TYPE_PASSWORD_RECOVERY;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FLOW_TYPE_REGISTRATION;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LOGIN_HINT;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.OAUTH2_ERROR_DESCRIPTION;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.WSO2_GIVENNAME_CLAIM_URI;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.WSO2_LASTNAME_CLAIM_URI;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.ENROL_PD;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.IDP_ID;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.LOGIN_PD;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.INVITED_USER_REGISTRATION;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.PASSWORD_RECOVERY;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.REGISTRATION;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LocalClaims.FIRST_NAME_CLAIM;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LocalClaims.LAST_NAME_CLAIM;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LogConstants.ActionIDs.BIND_VERIFIED_IDENTITY;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LogConstants.ActionIDs.POPULATE_VERIFIED_CLAIMS;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LogConstants.OUTBOUND_AUTH_DAON_SERVICE;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.OIDCParams.ACR_VALUES;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.OIDCParams.CLAIMS;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.OIDCParams.ERROR_DESCRIPTION;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.PropertyCarriers.CLAIMS_REQUEST;
+import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.PropertyCarriers.SELECTED_PD;
 
 /**
  * Flow executor for Daon TrustX, driving the OIDC authorization-code flow for all the flows.
@@ -90,12 +83,8 @@ public class DaonExecutor extends OpenIDConnectExecutor {
 
     private static final Log LOG = LogFactory.getLog(DaonExecutor.class);
     private static final String DAON_EXECUTOR_NAME = "DaonExecutor";
-
-    private static final String PORTAL_PATH_PREFIX = "/accounts/";
-    private static final String PORTAL_PATH_RECOVERY = "recovery";
-    private static final String PORTAL_PATH_REGISTER = "register";
-    private static final String ORGANIZATION_PATH_PREFIX = "/o/";
-    private static final String TENANT_PATH_PREFIX = "/t/";
+    private static final String FLOW_TYPE = "flow type";
+    private static final String CLAIM_URIS = "claim uris";
 
     @Override
     public String getName() {
@@ -134,7 +123,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         if (userInputs != null
                 && StringUtils.isNotBlank(userInputs.get(OIDCAuthenticatorConstants.OAUTH2_ERROR))) {
             String error = userInputs.get(OIDCAuthenticatorConstants.OAUTH2_ERROR);
-            String errorDescription = userInputs.get(OAUTH2_ERROR_DESCRIPTION);
+            String errorDescription = userInputs.get(ERROR_DESCRIPTION);
             ErrorMessage callbackError = DaonCallbackErrors.resolveError(error, errorDescription);
             if (LOG.isDebugEnabled()) {
                 LOG.debug(callbackError.getCode() + " - Daon returned an error on the flow callback. error="
@@ -143,8 +132,6 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             return userError(callbackError);
         }
 
-        flowExecutionContext.setPortalUrl(
-                buildPortalUrl(flowExecutionContext.getTenantDomain(), flowExecutionContext.getFlowType()));
         try {
             prepareRequest(flowExecutionContext);
         } catch (FlowEngineException e) {
@@ -157,8 +144,9 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             errorResponse.setErrorDescription(e.getDescription());
             return errorResponse;
         }
-        if (FLOW_TYPE_PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType())
-                && StringUtils.isBlank(flowExecutionContext.getAuthenticatorProperties().get(DAON_LOGIN_HINT))) {
+        if (PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType())
+                && StringUtils.isBlank(flowExecutionContext.getAuthenticatorProperties()
+                        .get(DaonConstants.PropertyCarriers.LOGIN_HINT))) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_USER_NOT_ENROLLED,
                         flowExecutionContext.getFlowType()));
@@ -185,27 +173,27 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         Map<String, String> enriched =
                 DaonReferencedIdpUtil.buildEffectiveProperties(props, flowExecutionContext.getTenantDomain());
 
-        boolean recovery = FLOW_TYPE_PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType());
+        boolean isRecovery = PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType());
         Map<String, String> claimMappings = getIdpClaimMappings(flowExecutionContext);
-        if (!recovery) {
+        if (!isRecovery) {
             Map<String, String> prefilledValues = claimMappings.isEmpty()
                     ? Collections.emptyMap()
                     : resolvePrefilledClaimValues(flowExecutionContext, claimMappings);
             assertProfileCanBeValidated(flowExecutionContext, prefilledValues);
             if (!claimMappings.isEmpty()) {
-                enriched.put(DAON_CLAIMS_REQUEST, buildClaimsRequest(claimMappings, prefilledValues));
+                enriched.put(CLAIMS_REQUEST, buildClaimsRequest(claimMappings, prefilledValues));
             }
         }
         // Reading enrol PD from `props` would drop acr_values and let Daon run its default PD.
-        String processDefinition = recovery ? enriched.get(DAON_LOGIN_PD) : enriched.get(DAON_ENROL_PD);
+        String processDefinition = isRecovery ? enriched.get(LOGIN_PD) : enriched.get(ENROL_PD);
         if (StringUtils.isNotBlank(processDefinition)) {
-            enriched.put(DAON_SELECTED_PD, processDefinition);
+            enriched.put(SELECTED_PD, processDefinition);
         }
 
-        if (recovery) {
+        if (isRecovery) {
             String loginHint = resolvePreferredUsername(flowExecutionContext);
             if (StringUtils.isNotBlank(loginHint)) {
-                enriched.put(DAON_LOGIN_HINT, loginHint);
+                enriched.put(DaonConstants.PropertyCarriers.LOGIN_HINT, loginHint);
             }
         }
         flowExecutionContext.setAuthenticatorProperties(enriched);
@@ -226,7 +214,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     private void assertProfileCanBeValidated(FlowExecutionContext flowExecutionContext,
                                              Map<String, String> prefilledValues) throws FlowEngineException {
 
-        if (!FLOW_TYPE_INVITED_USER_REGISTRATION.equals(flowExecutionContext.getFlowType())) {
+        if (!INVITED_USER_REGISTRATION.equals(flowExecutionContext.getFlowType())) {
             return;
         }
         if (DaonClaimsRequestBuilder.hasDocumentVerifiableValue(prefilledValues)) {
@@ -242,18 +230,18 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     public Map<String, String> getAdditionalQueryParams(Map<String, String> authenticatorProperties) {
 
         Map<String, String> params = new HashMap<>();
-        String processDefinition = authenticatorProperties.get(DAON_SELECTED_PD);
+        String processDefinition = authenticatorProperties.get(SELECTED_PD);
         if (StringUtils.isNotBlank(processDefinition)) {
-            params.put(ACR_VALUES_PARAM, processDefinition);
+            params.put(ACR_VALUES, processDefinition);
         }
-        String loginHint = authenticatorProperties.get(DAON_LOGIN_HINT);
+        String loginHint = authenticatorProperties.get(DaonConstants.PropertyCarriers.LOGIN_HINT);
         if (StringUtils.isNotBlank(loginHint)) {
-            params.put(LOGIN_HINT, loginHint);
+            params.put(DaonConstants.OIDCParams.LOGIN_HINT, loginHint);
             return params;
         }
-        String claimsRequest = authenticatorProperties.get(DAON_CLAIMS_REQUEST);
+        String claimsRequest = authenticatorProperties.get(CLAIMS_REQUEST);
         if (StringUtils.isNotBlank(claimsRequest)) {
-            params.put(CLAIMS_PARAM, claimsRequest);
+            params.put(CLAIMS, claimsRequest);
         }
         return params;
     }
@@ -262,23 +250,13 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     protected Map<String, Object> resolveUserAttributes(FlowExecutionContext flowExecutionContext, String code)
             throws FlowEngineException {
 
-        if (FLOW_TYPE_PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType())) {
+        if (PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType())) {
             return resolvePasswordRecoveryAttributes(flowExecutionContext, code);
         }
 
-        OAuthClientResponse oAuthResponse = requestAccessToken(flowExecutionContext, code);
-        resolveAccessToken(oAuthResponse);
-
-        String idToken = oAuthResponse.getParam(OIDCAuthenticatorConstants.ID_TOKEN);
-        if (StringUtils.isBlank(idToken)) {
-            throw DaonExceptionMgt.handleFlowServerException(ErrorMessage.ERROR_ID_TOKEN_NOT_FOUND,
-                    flowExecutionContext.getFlowType());
-        }
-
-        JSONObject idTokenPayload;
+        JSONObject idTokenPayload = resolveIdTokenPayload(flowExecutionContext, code);
         JSONObject daonClaims;
         try {
-            idTokenPayload = DaonJwtUtil.decodeJwtPayload(idToken);
             daonClaims = DaonJwtUtil.extractVerifiedClaims(idTokenPayload,
                     flowExecutionContext.getFlowType());
         } catch (DaonException e) {
@@ -286,18 +264,15 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             throw DaonExceptionMgt.toFlowServerException(e);
         }
 
-        if (StringUtils.isBlank(idTokenPayload.optString(DaonConstants.JWT_SUBJECT_CLAIM, null))) {
+        if (StringUtils.isBlank(idTokenPayload.optString(DaonConstants.IdTokenClaims.SUBJECT, null))) {
             throw DaonExceptionMgt.handleFlowServerException(ErrorMessage.ERROR_SUBJECT_CLAIM_NOT_FOUND,
                     flowExecutionContext.getFlowType());
         }
 
         Map<String, Object> userAttributes = new HashMap<>();
 
-        Map<String, String> claimMappings = getIdpClaimMappings(flowExecutionContext);
-        Map<String, String> reverseClaimMap = new HashMap<>();
-        for (Map.Entry<String, String> entry : claimMappings.entrySet()) {
-            reverseClaimMap.put(entry.getValue(), entry.getKey());
-        }
+        Map<String, String> reverseClaimMap =
+                DaonClaimMappingUtil.invert(getIdpClaimMappings(flowExecutionContext));
 
         Map<String, String> extractedClaims = new HashMap<>();
         for (String key : daonClaims.keySet()) {
@@ -311,11 +286,9 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             }
         }
 
-        String preferredUsername = idTokenPayload.optString(DaonConstants.JWT_PREFERRED_USERNAME_CLAIM, null);
+        String preferredUsername = idTokenPayload.optString(DaonConstants.IdTokenClaims.PREFERRED_USERNAME, null);
 
-        // Self-registration: Daon is the source of truth, so provision the profile. The invited user's
-        // admin-defined profile is authoritative and is left untouched.
-        if (FLOW_TYPE_REGISTRATION.equals(flowExecutionContext.getFlowType())) {
+        if (REGISTRATION.equals(flowExecutionContext.getFlowType())) {
             userAttributes.putAll(buildProfileClaims(daonClaims, extractedClaims, reverseClaimMap));
         }
 
@@ -329,13 +302,36 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                     "the Daon Verifier name could not be resolved for the " + flowExecutionContext.getFlowType()
                             + " flow");
         }
-        flowExecutionContext.setProperty(DAON_FED_IDP_NAME, daonIdpName);
-        flowExecutionContext.setProperty(DAON_FED_SUBJECT, preferredUsername);
+        flowExecutionContext.getFlowUser().addFederatedAssociation(daonIdpName, preferredUsername);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put(FLOW_TYPE, flowExecutionContext.getFlowType());
+        params.put(LogConstants.InputKeys.IDP, daonIdpName);
+        logDiagnostic("Bound the identity Daon verified to the user.", DiagnosticLog.ResultStatus.SUCCESS,
+                BIND_VERIFIED_IDENTITY, params);
+        if (!userAttributes.isEmpty()) {
+            // These overwrite whatever the user entered for the same claims.
+            params = new HashMap<>();
+            params.put(FLOW_TYPE, flowExecutionContext.getFlowType());
+            params.put(CLAIM_URIS, userAttributes.keySet());
+            logDiagnostic("Populating the user's claims from the identity document Daon verified.",
+                    DiagnosticLog.ResultStatus.SUCCESS, POPULATE_VERIFIED_CLAIMS, params);
+        }
         return userAttributes;
     }
 
-    private Map<String, Object> resolvePasswordRecoveryAttributes(FlowExecutionContext flowExecutionContext,
-                                                                   String code) throws FlowEngineException {
+    @Override
+    protected String getDiagnosticLogComponentId() {
+
+        return OUTBOUND_AUTH_DAON_SERVICE;
+    }
+
+    /**
+     * Exchanges the authorization code and reads the ID token's claims. The OIDC base class has already
+     * obtained and validated the token over the back channel, so this is a claims read.
+     */
+    private JSONObject resolveIdTokenPayload(FlowExecutionContext flowExecutionContext, String code)
+            throws FlowEngineException {
 
         OAuthClientResponse oAuthResponse = requestAccessToken(flowExecutionContext, code);
         resolveAccessToken(oAuthResponse);
@@ -345,25 +341,35 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             throw DaonExceptionMgt.handleFlowServerException(ErrorMessage.ERROR_ID_TOKEN_NOT_FOUND,
                     flowExecutionContext.getFlowType());
         }
-        JSONObject idTokenPayload;
         try {
-            idTokenPayload = DaonJwtUtil.decodeJwtPayload(idToken);
+            return DaonJwtUtil.decodeJwtPayload(idToken);
         } catch (DaonException e) {
+            LOG.error(e.getErrorCode() + " - " + e.getMessage(), e);
             throw DaonExceptionMgt.toFlowServerException(e);
         }
+    }
+
+    private Map<String, Object> resolvePasswordRecoveryAttributes(FlowExecutionContext flowExecutionContext,
+                                                                   String code) throws FlowEngineException {
+
+        JSONObject idTokenPayload = resolveIdTokenPayload(flowExecutionContext, code);
         String returnedPreferredUsername =
-                idTokenPayload.optString(DaonConstants.JWT_PREFERRED_USERNAME_CLAIM, null);
+                idTokenPayload.optString(DaonConstants.IdTokenClaims.PREFERRED_USERNAME, null);
         if (StringUtils.isBlank(returnedPreferredUsername)) {
             throw DaonExceptionMgt.handleFlowServerException(
                     ErrorMessage.ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN);
         }
 
-        String expectedSubject = flowExecutionContext.getAuthenticatorProperties().get(DAON_LOGIN_HINT);
+        String expectedSubject = flowExecutionContext.getAuthenticatorProperties()
+                .get(DaonConstants.PropertyCarriers.LOGIN_HINT);
         if (!DaonJwtUtil.isExpectedSubject(expectedSubject, returnedPreferredUsername)) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Daon returned an identity that does not match the account being recovered. "
-                        + "Expected: " + expectedSubject + ", returned preferred_username: "
-                        + returnedPreferredUsername);
+                        + "Expected: " + (LoggerUtils.isLogMaskingEnable
+                                ? LoggerUtils.getMaskedContent(expectedSubject) : expectedSubject)
+                        + ", returned preferred_username: " + (LoggerUtils.isLogMaskingEnable
+                                ? LoggerUtils.getMaskedContent(returnedPreferredUsername)
+                                : returnedPreferredUsername));
             }
             LOG.error(ErrorMessage.ERROR_RECOVERY_IDENTITY_MISMATCH.getCode()
                     + " - The identity Daon verified does not match the Daon subject recorded for the "
@@ -384,23 +390,23 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     private void populateNameClaims(JSONObject daonClaims, Map<String, Object> profileClaims,
                                     Map<String, String> daonToLocalClaim) {
 
-        String givenNameUri = resolveNameClaimUri(daonToLocalClaim, DaonConstants.CLAIM_GIVEN_NAME,
-                WSO2_GIVENNAME_CLAIM_URI);
-        String familyNameUri = resolveNameClaimUri(daonToLocalClaim, DaonConstants.CLAIM_FAMILY_NAME,
-                WSO2_LASTNAME_CLAIM_URI);
+        String givenNameUri = resolveNameClaimUri(daonToLocalClaim, DaonConstants.DaonClaims.GIVEN_NAME,
+                FIRST_NAME_CLAIM);
+        String familyNameUri = resolveNameClaimUri(daonToLocalClaim, DaonConstants.DaonClaims.FAMILY_NAME,
+                LAST_NAME_CLAIM);
         boolean hasGiven = profileClaims.containsKey(givenNameUri);
         boolean hasLast = profileClaims.containsKey(familyNameUri);
         if (hasGiven && hasLast) {
             return;
         }
-        String combined = DaonJwtUtil.resolveClaimValue(DaonConstants.CLAIM_FAMILY_NAME_AND_GIVEN_NAME,
-                daonClaims.opt(DaonConstants.CLAIM_FAMILY_NAME_AND_GIVEN_NAME));
+        String combined = DaonJwtUtil.resolveClaimValue(DaonConstants.DaonClaims.FAMILY_NAME_AND_GIVEN_NAME,
+                daonClaims.opt(DaonConstants.DaonClaims.FAMILY_NAME_AND_GIVEN_NAME));
         if (StringUtils.isBlank(combined)
-                || !combined.contains(DaonConstants.DAON_FIELD_SEPARATOR)) {
+                || !combined.contains(DaonConstants.DaonClaims.FIELD_SEPARATOR)) {
             return;
         }
         String[] parts = combined.split(
-                Pattern.quote(DaonConstants.DAON_FIELD_SEPARATOR), 2);
+                Pattern.quote(DaonConstants.DaonClaims.FIELD_SEPARATOR), 2);
         String familyName = parts[0].trim();
         String givenName = parts.length > 1 ? parts[1].trim() : null;
         if (!hasGiven && StringUtils.isNotBlank(givenName)) {
@@ -434,38 +440,14 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                 resolved.put(uri, value.toString());
             }
         }
-        String userId = flowUser.getUserId();
-        if (StringUtils.isBlank(userId)) {
-            return resolved;
-        }
         List<String> missing = new ArrayList<>();
         for (String uri : claimUris) {
             if (!resolved.containsKey(uri)) {
                 missing.add(uri);
             }
         }
-        if (missing.isEmpty()) {
-            return resolved;
-        }
-        try {
-            int tenantId = IdentityTenantUtil.getTenantId(context.getTenantDomain());
-            UserStoreManager usm = DaonConnectorDataHolder.getRealmService()
-                    .getTenantUserRealm(tenantId).getUserStoreManager();
-            if (usm instanceof UniqueIDUserStoreManager) {
-                Map<String, String> stored = ((UniqueIDUserStoreManager) usm)
-                        .getUserClaimValuesWithID(userId, missing.toArray(new String[0]), null);
-                if (stored != null) {
-                    for (Map.Entry<String, String> entry : stored.entrySet()) {
-                        if (StringUtils.isNotBlank(entry.getValue())) {
-                            resolved.put(entry.getKey(), entry.getValue());
-                        }
-                    }
-                }
-            }
-        } catch (UserStoreException e) {
-            LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_READING_USER_CLAIMS,
-                    "the invited user"), e);
-        }
+        resolved.putAll(DaonUserClaimReader.readByUserId(context.getTenantDomain(), flowUser.getUserId(),
+                missing, "the invited user"));
         return resolved;
     }
 
@@ -483,48 +465,23 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         if (StringUtils.isBlank(daonIdpName)) {
             return null;
         }
-        User user = DaonFederatedAssociationUtil.buildUser(username, context.getTenantDomain());
-        return DaonFederatedAssociationUtil.getAssociatedDaonSubject(user, daonIdpName);
+        return DaonFederatedAssociationUtil.resolveEnrolledSubject(username, context.getTenantDomain(),
+                daonIdpName);
     }
 
     private String resolveDaonIdpName(FlowExecutionContext context) {
 
-        String idpResourceId = context.getAuthenticatorProperties().get(DAON_IDP_ID);
-        if (StringUtils.isNotBlank(idpResourceId)) {
-            return DaonReferencedIdpUtil.resolveIdpName(idpResourceId, context.getTenantDomain());
-        }
-        return context.getExternalIdPConfig() != null
-                ? context.getExternalIdPConfig().getIdPName() : null;
-    }
-
-    private String buildPortalUrl(String tenantDomain, String flowType) {
-
-        String portalPath = PORTAL_PATH_PREFIX
-                + (FLOW_TYPE_PASSWORD_RECOVERY.equals(flowType) ? PORTAL_PATH_RECOVERY : PORTAL_PATH_REGISTER);
-        try {
-            if (MultitenantConstants.SUPER_TENANT_DOMAIN_NAME.equals(tenantDomain)) {
-                return IdentityUtil.getServerURL(portalPath, true, true);
-            }
-            if (OrganizationManagementUtil.isOrganization(tenantDomain)) {
-                OrganizationManager orgManager = DaonConnectorDataHolder.getOrganizationManager();
-                if (orgManager != null) {
-                    String orgId = orgManager.resolveOrganizationId(tenantDomain);
-                    return IdentityUtil.getServerURL(ORGANIZATION_PATH_PREFIX + orgId + portalPath,
-                            true, true);
-                }
-            }
-            return IdentityUtil.getServerURL(TENANT_PATH_PREFIX + tenantDomain + portalPath, true, true);
-        } catch (Exception e) {
-            LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_BUILDING_PORTAL_URL, tenantDomain), e);
-            return IdentityUtil.getServerURL(portalPath, true, true);
-        }
+        return DaonReferencedIdpUtil.resolveDaonIdpName(
+                context.getAuthenticatorProperties().get(IDP_ID),
+                context.getExternalIdPConfig() != null ? context.getExternalIdPConfig().getIdPName() : null,
+                context.getTenantDomain());
     }
 
     private Map<String, String> resolvePrefilledClaimValues(FlowExecutionContext context,
                                                              Map<String, String> claimMappings) {
 
         Map<String, String> localValues;
-        if (FLOW_TYPE_INVITED_USER_REGISTRATION.equals(context.getFlowType())) {
+        if (INVITED_USER_REGISTRATION.equals(context.getFlowType())) {
             localValues = resolveInvitedUserClaims(context, claimMappings.keySet());
         } else {
             localValues = new HashMap<>();
@@ -540,31 +497,12 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             }
         }
 
-        Map<String, String> valuesByDaonName = new HashMap<>();
-        for (Map.Entry<String, String> mapping : claimMappings.entrySet()) {
-            String value = localValues.get(mapping.getKey());
-            if (StringUtils.isNotBlank(value)) {
-                valuesByDaonName.put(mapping.getValue(), value.trim());
-            }
-        }
-        return valuesByDaonName;
+        return DaonClaimMappingUtil.toDaonClaimValues(claimMappings, localValues);
     }
 
     private Map<String, String> getIdpClaimMappings(FlowExecutionContext context) {
 
-        Map<String, String> mappings = new HashMap<>();
         ExternalIdPConfig idpConfig = context.getExternalIdPConfig();
-        if (idpConfig == null || idpConfig.getClaimMappings() == null) {
-            return mappings;
-        }
-        for (ClaimMapping claimMapping : idpConfig.getClaimMappings()) {
-            if (claimMapping.getLocalClaim() != null && claimMapping.getRemoteClaim() != null
-                    && StringUtils.isNotBlank(claimMapping.getLocalClaim().getClaimUri())
-                    && StringUtils.isNotBlank(claimMapping.getRemoteClaim().getClaimUri())) {
-                mappings.put(claimMapping.getLocalClaim().getClaimUri(),
-                        claimMapping.getRemoteClaim().getClaimUri());
-            }
-        }
-        return mappings;
+        return DaonClaimMappingUtil.toClaimMap(idpConfig != null ? idpConfig.getClaimMappings() : null);
     }
 }

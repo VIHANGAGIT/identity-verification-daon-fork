@@ -29,12 +29,9 @@ import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferencePolicy;
 import org.wso2.carbon.identity.application.authentication.framework.ApplicationAuthenticator;
 import org.wso2.carbon.identity.flow.execution.engine.graph.Executor;
-import org.wso2.carbon.identity.flow.execution.engine.listener.FlowExecutionListener;
-import org.wso2.carbon.identity.organization.management.service.OrganizationManager;
 import org.wso2.carbon.identity.user.profile.mgt.association.federation.FederatedAssociationManager;
 import org.wso2.carbon.identity.verification.daon.connector.DaonAuthenticator;
 import org.wso2.carbon.identity.verification.daon.connector.DaonExecutor;
-import org.wso2.carbon.identity.verification.daon.connector.DaonFederatedAssociationListener;
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
 import org.wso2.carbon.identity.verification.daon.connector.exception.DaonExceptionMgt;
 import org.wso2.carbon.idp.mgt.IdpManager;
@@ -58,8 +55,6 @@ public class DaonConnectorServiceComponent {
                     ApplicationAuthenticator.class.getName(), new DaonAuthenticator(), null);
             ctxt.getBundleContext().registerService(
                     Executor.class.getName(), new DaonExecutor(), null);
-            ctxt.getBundleContext().registerService(
-                    FlowExecutionListener.class.getName(), new DaonFederatedAssociationListener(), null);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Daon connector bundle activated successfully.");
             }
@@ -107,22 +102,6 @@ public class DaonConnectorServiceComponent {
     protected void unsetFederatedAssociationManager(FederatedAssociationManager federatedAssociationManager) {
 
         DaonConnectorDataHolder.setFederatedAssociationManager(null);
-    }
-
-    @Reference(
-            name = "OrganizationManager",
-            service = OrganizationManager.class,
-            cardinality = ReferenceCardinality.OPTIONAL,
-            policy = ReferencePolicy.DYNAMIC,
-            unbind = "unsetOrganizationManager")
-    protected void setOrganizationManager(OrganizationManager organizationManager) {
-
-        DaonConnectorDataHolder.setOrganizationManager(organizationManager);
-    }
-
-    protected void unsetOrganizationManager(OrganizationManager organizationManager) {
-
-        DaonConnectorDataHolder.setOrganizationManager(null);
     }
 
     @Reference(

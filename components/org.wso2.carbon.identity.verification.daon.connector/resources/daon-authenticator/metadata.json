@@ -96,11 +96,7 @@
                 "steps": [
                     {
                         "title": "Configure the connection",
-                        "content": "<p>Select the <strong>Daon Identity Verifier</strong> connection and provide the <strong>Login Process Definition</strong> on the <strong>Settings</strong> tab. The OIDC client credentials, endpoints and scopes are resolved from the referenced Daon Identity Verifier connection.</p>"
-                    },
-                    {
-                        "title": "Map attributes",
-                        "content": "<p>On the <strong>Attributes</strong> tab, map Daon verified claims (e.g. <Code class=\"inline-code\">given_name</Code>, <Code class=\"inline-code\">family_name</Code>, <Code class=\"inline-code\">birthdate</Code>) to WSO2 local claims. These drive verification.</p>"
+                        "content": "<p>Select the <strong>Daon Identity Verifier</strong> connection and provide the <strong>Login Process Definition</strong> on the <strong>Settings</strong> tab. The OIDC client credentials, endpoints, scopes and <strong>attribute mappings</strong> are all resolved from the referenced Daon Identity Verifier connection, so nothing needs to be mapped on this connection.</p>"
                     },
                     {
                         "title": "Add Daon TrustX to a login flow",

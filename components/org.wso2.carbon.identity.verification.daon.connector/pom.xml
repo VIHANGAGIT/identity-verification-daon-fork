@@ -51,6 +51,11 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-collections4</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>org.json</groupId>
             <artifactId>json</artifactId>
             <scope>provided</scope>
@@ -61,8 +66,18 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
+            <groupId>org.wso2.carbon</groupId>
+            <artifactId>org.wso2.carbon.utils</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>org.wso2.carbon.identity.framework</groupId>
             <artifactId>org.wso2.carbon.identity.core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wso2.carbon.identity.framework</groupId>
+            <artifactId>org.wso2.carbon.identity.central.log.mgt</artifactId>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -88,11 +103,6 @@
         <dependency>
             <groupId>org.wso2.carbon.identity.framework</groupId>
             <artifactId>org.wso2.carbon.identity.flow.execution.engine</artifactId>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.wso2.carbon.identity.organization.management.core</groupId>
-            <artifactId>org.wso2.carbon.identity.organization.management.service</artifactId>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -195,6 +205,7 @@
                             org.wso2.carbon.identity.verification.daon.connector.util
                         </Private-Package>
                         <Import-Package>
+                            org.apache.commons.collections4; version="${apache.common.collections4.imp.pkg.version.range}",
                             org.apache.commons.lang; version="${commons-lang.wso2.osgi.version.range}",
                             org.apache.commons.logging; version="${import.package.version.commons.logging}",
                             org.apache.oltu.oauth2.*; version="${oltu.package.import.version.range}",
@@ -211,16 +222,14 @@
                             version="${carbon.identity.package.import.version.range}",
                             org.wso2.carbon.identity.application.common.util;
                             version="${carbon.identity.package.import.version.range}",
+                            org.wso2.carbon.identity.central.log.mgt.utils;
+                            version="${carbon.identity.package.import.version.range}",
                             org.wso2.carbon.identity.base; version="${carbon.identity.package.import.version.range}",
                             org.wso2.carbon.identity.core.util; version="${carbon.identity.package.import.version.range}",
                             org.wso2.carbon.identity.flow.execution.engine,
                             org.wso2.carbon.identity.flow.execution.engine.*,
                             org.wso2.carbon.identity.flow.mgt;
                             version="${carbon.identity.package.import.version.range}",
-                            org.wso2.carbon.identity.organization.management.service;
-                            version="${identity.organization.management.imp.pkg.version.range}",
-                            org.wso2.carbon.identity.organization.management.service.util;
-                            version="${identity.organization.management.imp.pkg.version.range}",
                             org.wso2.carbon.identity.user.profile.mgt.association.federation,
                             org.wso2.carbon.identity.user.profile.mgt.association.federation.exception,
                             org.wso2.carbon.identity.user.profile.mgt.association.federation.model,
@@ -231,6 +240,7 @@
                             org.wso2.carbon.user.core.common; version="${carbon.kernel.package.import.version.range}",
                             org.wso2.carbon.user.core.service; version="${carbon.kernel.package.import.version.range}",
                             org.wso2.carbon.user.core.util; version="${carbon.kernel.package.import.version.range}",
+                            org.wso2.carbon.utils; version="${carbon.kernel.package.import.version.range}",
                             org.wso2.carbon.utils.multitenancy;
                             version="${carbon.kernel.package.import.version.range}"
                         </Import-Package>

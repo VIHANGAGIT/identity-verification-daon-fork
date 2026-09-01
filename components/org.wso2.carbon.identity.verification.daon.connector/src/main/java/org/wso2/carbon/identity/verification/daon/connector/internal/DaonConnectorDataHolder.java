@@ -18,7 +18,6 @@
 
 package org.wso2.carbon.identity.verification.daon.connector.internal;
 
-import org.wso2.carbon.identity.organization.management.service.OrganizationManager;
 import org.wso2.carbon.identity.user.profile.mgt.association.federation.FederatedAssociationManager;
 import org.wso2.carbon.idp.mgt.IdpManager;
 import org.wso2.carbon.user.core.service.RealmService;
@@ -29,7 +28,6 @@ import org.wso2.carbon.user.core.service.RealmService;
 public final class DaonConnectorDataHolder {
 
     private static RealmService realmService;
-    private static OrganizationManager organizationManager;
     private static FederatedAssociationManager federatedAssociationManager;
     private static IdpManager idpManager;
 
@@ -44,16 +42,6 @@ public final class DaonConnectorDataHolder {
     public static void setRealmService(RealmService realmService) {
 
         DaonConnectorDataHolder.realmService = realmService;
-    }
-
-    public static OrganizationManager getOrganizationManager() {
-
-        return organizationManager;
-    }
-
-    public static void setOrganizationManager(OrganizationManager organizationManager) {
-
-        DaonConnectorDataHolder.organizationManager = organizationManager;
     }
 
     public static FederatedAssociationManager getFederatedAssociationManager() {

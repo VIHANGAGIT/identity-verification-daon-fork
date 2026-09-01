@@ -40,9 +40,9 @@ public class DaonJwtUtilTest {
 
     private JSONObject payloadWith(JSONObject verifiedClaims) {
 
-        JSONObject payload = new JSONObject().put(DaonConstants.JWT_SUBJECT_CLAIM, "daon-sub");
+        JSONObject payload = new JSONObject().put(DaonConstants.IdTokenClaims.SUBJECT, "daon-sub");
         if (verifiedClaims != null) {
-            payload.put(DaonConstants.JWT_VERIFIED_CLAIMS_OBJECT, verifiedClaims);
+            payload.put(DaonConstants.IdTokenClaims.VERIFIED_CLAIMS_OBJECT, verifiedClaims);
         }
         return payload;
     }
@@ -51,11 +51,11 @@ public class DaonJwtUtilTest {
 
         JSONObject verifiedClaims = new JSONObject();
         if (trustFramework != null) {
-            verifiedClaims.put(DaonConstants.VERIFICATION,
-                    new JSONObject().put(DaonConstants.TRUST_FRAMEWORK, trustFramework));
+            verifiedClaims.put(DaonConstants.ClaimsRequest.VERIFICATION,
+                    new JSONObject().put(DaonConstants.ClaimsRequest.TRUST_FRAMEWORK, trustFramework));
         }
         if (claims != null) {
-            verifiedClaims.put(DaonConstants.JWT_CLAIMS_OBJECT, claims);
+            verifiedClaims.put(DaonConstants.IdTokenClaims.CLAIMS_OBJECT, claims);
         }
         return verifiedClaims;
     }
@@ -63,13 +63,13 @@ public class DaonJwtUtilTest {
     @Test
     public void testExtractsClaimsWithRequestedTrustFramework() throws Exception {
 
-        JSONObject claims = new JSONObject().put(DaonConstants.CLAIM_GIVEN_NAME, "JOHN");
+        JSONObject claims = new JSONObject().put(DaonConstants.DaonClaims.GIVEN_NAME, "JOHN");
         JSONObject payload =
-                payloadWith(verifiedClaims(DaonConstants.TRUST_FRAMEWORK_VALUE, claims));
+                payloadWith(verifiedClaims(DaonConstants.ClaimsRequest.TRUST_FRAMEWORK_VALUE, claims));
 
         JSONObject extracted = DaonJwtUtil.extractVerifiedClaims(payload, FLOW_TYPE);
 
-        assertEquals(extracted.getString(DaonConstants.CLAIM_GIVEN_NAME), "JOHN");
+        assertEquals(extracted.getString(DaonConstants.DaonClaims.GIVEN_NAME), "JOHN");
     }
 
     /**
@@ -79,11 +79,11 @@ public class DaonJwtUtilTest {
     @Test
     public void testExtractsClaimsWhenVerificationDescriptorAbsent() throws Exception {
 
-        JSONObject claims = new JSONObject().put(DaonConstants.CLAIM_GIVEN_NAME, "JOHN");
+        JSONObject claims = new JSONObject().put(DaonConstants.DaonClaims.GIVEN_NAME, "JOHN");
         JSONObject extracted =
                 DaonJwtUtil.extractVerifiedClaims(payloadWith(verifiedClaims(null, claims)), FLOW_TYPE);
 
-        assertEquals(extracted.getString(DaonConstants.CLAIM_GIVEN_NAME), "JOHN");
+        assertEquals(extracted.getString(DaonConstants.DaonClaims.GIVEN_NAME), "JOHN");
     }
 
     /**
@@ -94,7 +94,7 @@ public class DaonJwtUtilTest {
     public void testRejectsUnexpectedTrustFramework() {
 
         JSONObject payload = payloadWith(verifiedClaims("some-other-framework",
-                new JSONObject().put(DaonConstants.CLAIM_GIVEN_NAME, "JOHN")));
+                new JSONObject().put(DaonConstants.DaonClaims.GIVEN_NAME, "JOHN")));
 
         DaonServerException e = expectThrows(DaonServerException.class,
                 () -> DaonJwtUtil.extractVerifiedClaims(payload, FLOW_TYPE));
@@ -115,7 +115,7 @@ public class DaonJwtUtilTest {
     public void testFailsWhenNestedClaimsObjectMissing() {
 
         JSONObject payload =
-                payloadWith(verifiedClaims(DaonConstants.TRUST_FRAMEWORK_VALUE, null));
+                payloadWith(verifiedClaims(DaonConstants.ClaimsRequest.TRUST_FRAMEWORK_VALUE, null));
 
         DaonServerException e = expectThrows(DaonServerException.class,
                 () -> DaonJwtUtil.extractVerifiedClaims(payload, FLOW_TYPE));
@@ -126,7 +126,7 @@ public class DaonJwtUtilTest {
     public void testFailsWhenVerifiedClaimsIsNotAnObject() {
 
         JSONObject payload = new JSONObject()
-                .put(DaonConstants.JWT_VERIFIED_CLAIMS_OBJECT, "not-an-object");
+                .put(DaonConstants.IdTokenClaims.VERIFIED_CLAIMS_OBJECT, "not-an-object");
 
         assertEquals(expectThrows(DaonServerException.class,
                 () -> DaonJwtUtil.extractVerifiedClaims(payload, FLOW_TYPE)).getErrorCode(),
@@ -154,12 +154,12 @@ public class DaonJwtUtilTest {
     @Test
     public void testResolveClaimValueFlattensAddress() {
 
-        JSONObject address = new JSONObject().put(DaonConstants.CLAIM_ADDRESS_FORMATTED, "1 Main St");
+        JSONObject address = new JSONObject().put(DaonConstants.DaonClaims.ADDRESS_FORMATTED, "1 Main St");
 
-        assertEquals(DaonJwtUtil.resolveClaimValue(DaonConstants.CLAIM_ADDRESS, address), "1 Main St");
-        assertEquals(DaonJwtUtil.resolveClaimValue(DaonConstants.CLAIM_GIVEN_NAME, "JOHN"), "JOHN");
-        assertNull(DaonJwtUtil.resolveClaimValue(DaonConstants.CLAIM_GIVEN_NAME, JSONObject.NULL));
-        assertNull(DaonJwtUtil.resolveClaimValue(DaonConstants.CLAIM_GIVEN_NAME, null));
+        assertEquals(DaonJwtUtil.resolveClaimValue(DaonConstants.DaonClaims.ADDRESS, address), "1 Main St");
+        assertEquals(DaonJwtUtil.resolveClaimValue(DaonConstants.DaonClaims.GIVEN_NAME, "JOHN"), "JOHN");
+        assertNull(DaonJwtUtil.resolveClaimValue(DaonConstants.DaonClaims.GIVEN_NAME, JSONObject.NULL));
+        assertNull(DaonJwtUtil.resolveClaimValue(DaonConstants.DaonClaims.GIVEN_NAME, null));
     }
 
     /**

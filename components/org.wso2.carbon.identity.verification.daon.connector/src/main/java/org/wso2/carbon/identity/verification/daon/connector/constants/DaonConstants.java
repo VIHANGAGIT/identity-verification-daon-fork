@@ -19,88 +19,192 @@
 package org.wso2.carbon.identity.verification.daon.connector.constants;
 
 /**
- * Constants used across the Daon TrustX connector. Error codes and messages live in
- * {@link DaonErrorConstants}.
+ * Constants used across the Daon TrustX connector, grouped by the wire or store each name belongs to.
+ * Error codes and messages live in {@link DaonErrorConstants}.
  */
 public final class DaonConstants {
 
     private DaonConstants() {
     }
 
-    public static final String LOGIN_HINT = "login_hint";
-    public static final String ACR_VALUES_PARAM = "acr_values";
-    public static final String OAUTH2_ERROR_DESCRIPTION = "error_description";
-
-    public static final String CLAIMS_PARAM = "claims";
-    public static final String CLAIM_VALUE_MEMBER = "value";
-    public static final String VERIFIED_CLAIMS = "verified_claims";
-    public static final String VERIFICATION = "verification";
-    public static final String TRUST_FRAMEWORK = "trust_framework";
-    public static final String TRUST_FRAMEWORK_VALUE = "daon-identify-1";
-    public static final String ID_TOKEN_CONTAINER = "id_token";
-
-    public static final String CLAIM_GIVEN_NAME = "given_name";
-    public static final String CLAIM_FAMILY_NAME = "family_name";
-    public static final String CLAIM_FAMILY_NAME_AND_GIVEN_NAME = "family_name_and_given_name";
-    public static final String CLAIM_BIRTHDATE = "birthdate";
-    public static final String CLAIM_DOCUMENT_TYPE = "document_type";
-    public static final String CLAIM_DOCUMENT_CLASSIFICATION = "document_classification";
-    public static final String CLAIM_DOCUMENT_DATE_OF_EXPIRY = "document_date_of_expiry";
-    public static final String CLAIM_DOCUMENT_NUMBER = "document_number";
-    public static final String CLAIM_DOCUMENT_PERSONAL_NUMBER = "document_personal_number";
-
-    public static final String CLAIM_ADDRESS = "address";
-    public static final String CLAIM_ADDRESS_FORMATTED = "formatted";
-    public static final String DAON_FIELD_SEPARATOR = "^";
-
-    public static final String JWT_SUBJECT_CLAIM = "sub";
-    public static final String JWT_VERIFIED_CLAIMS_OBJECT = "verifiedClaims";
-    public static final String JWT_CLAIMS_OBJECT = "claims";
-    public static final String JWT_PREFERRED_USERNAME_CLAIM = "preferred_username";
-
     public static final String AUTHENTICATOR_NAME = "DaonAuthenticator";
     public static final String AUTHENTICATOR_FRIENDLY_NAME = "Daon TrustX";
 
-    public static final String DAON_LOGIN_PD = "daon_login_pd";
-    public static final String DAON_ENROL_PD = "daon_enrol_pd";
-    public static final String DAON_IDP_ID = "daon_idp_id";
+    /**
+     * OIDC request and callback parameter names exchanged with Daon.
+     */
+    public static class OIDCParams {
+
+        private OIDCParams() {
+        }
+
+        public static final String LOGIN_HINT = "login_hint";
+        public static final String ACR_VALUES = "acr_values";
+        public static final String CLAIMS = "claims";
+        public static final String ERROR_DESCRIPTION = "error_description";
+    }
 
     /**
-     * Adaptive-script parameter asking the login step to enrol rather than re-verify.
+     * Members of the OIDC {@code claims} request parameter that carries the verified-claims value-requests.
      */
-    public static final String DAON_RUNTIME_PARAM_ENROL = "enrol";
+    public static class ClaimsRequest {
 
-    /*
-     * Internal carrier keys, not connection properties: values passed through the authenticator
-     * properties into getAdditionalQueryParams(), whose signature takes nothing else.
+        private ClaimsRequest() {
+        }
+
+        public static final String ID_TOKEN_CONTAINER = "id_token";
+        public static final String VERIFIED_CLAIMS = "verified_claims";
+        public static final String VERIFICATION = "verification";
+        public static final String TRUST_FRAMEWORK = "trust_framework";
+        public static final String TRUST_FRAMEWORK_VALUE = "daon-identify-1";
+        public static final String VALUE_MEMBER = "value";
+    }
+
+    /**
+     * Local claim URIs the connector falls back to when the identity provider has no mapping for a Daon claim.
      */
-    public static final String DAON_SELECTED_PD = "daon_selected_pd";
-    public static final String DAON_CLAIMS_REQUEST = "daon_claims_request";
-    public static final String DAON_LOGIN_HINT = "daon_login_hint";
+    public static class LocalClaims {
 
-    /*
+        private LocalClaims() {
+        }
+
+        public static final String FIRST_NAME_CLAIM = "http://wso2.org/claims/givenname";
+        public static final String LAST_NAME_CLAIM = "http://wso2.org/claims/lastname";
+    }
+
+    /**
+     * Claim names Daon verifies against the identity document.
+     */
+    public static class DaonClaims {
+
+        private DaonClaims() {
+        }
+
+        public static final String GIVEN_NAME = "given_name";
+        public static final String FAMILY_NAME = "family_name";
+        public static final String FAMILY_NAME_AND_GIVEN_NAME = "family_name_and_given_name";
+        public static final String BIRTHDATE = "birthdate";
+        public static final String DOCUMENT_TYPE = "document_type";
+        public static final String DOCUMENT_CLASSIFICATION = "document_classification";
+        public static final String DOCUMENT_DATE_OF_EXPIRY = "document_date_of_expiry";
+        public static final String DOCUMENT_NUMBER = "document_number";
+        public static final String DOCUMENT_PERSONAL_NUMBER = "document_personal_number";
+        public static final String ADDRESS = "address";
+        public static final String ADDRESS_FORMATTED = "formatted";
+
+        /**
+         * Separator Daon uses inside a composite claim value, e.g. {@code family_name_and_given_name}.
+         */
+        public static final String FIELD_SEPARATOR = "^";
+    }
+
+    /**
+     * Claims read out of the Daon ID token payload.
+     */
+    public static class IdTokenClaims {
+
+        private IdTokenClaims() {
+        }
+
+        public static final String SUBJECT = "sub";
+        public static final String PREFERRED_USERNAME = "preferred_username";
+        public static final String VERIFIED_CLAIMS_OBJECT = "verifiedClaims";
+        public static final String CLAIMS_OBJECT = "claims";
+    }
+
+    /**
+     * Authenticator configuration properties of a Daon connection.
+     */
+    public static class ConnectionProperties {
+
+        private ConnectionProperties() {
+        }
+
+        public static final String LOGIN_PD = "daon_login_pd";
+        public static final String ENROL_PD = "daon_enrol_pd";
+        public static final String IDP_ID = "daon_idp_id";
+    }
+
+    /**
+     * Adaptive-script runtime parameters.
+     */
+    public static class RuntimeParams {
+
+        private RuntimeParams() {
+        }
+
+        /**
+         * Asks the login step to enrol rather than re-verify.
+         */
+        public static final String ENROL = "enrol";
+    }
+
+    /**
+     * Internal carrier keys, not connection properties: values passed through the authenticator properties
+     * into {@code getAdditionalQueryParams()}, whose signature takes nothing else.
+     */
+    public static class PropertyCarriers {
+
+        private PropertyCarriers() {
+        }
+
+        public static final String SELECTED_PD = "daon_selected_pd";
+        public static final String CLAIMS_REQUEST = "daon_claims_request";
+        public static final String LOGIN_HINT = "daon_login_hint";
+    }
+
+    /**
      * Authentication-context markers describing the in-flight authorize request, stashed when it is built
      * and consumed at the callback.
      */
-    public static final String DAON_EXPECTED_SUBJECT = "daon_expected_subject";
-    public static final String DAON_ENROLLING_USER = "daon_enrolling_user";
+    public static class ContextProperties {
+
+        private ContextProperties() {
+        }
+
+        public static final String EXPECTED_SUBJECT = "daon_expected_subject";
+        public static final String ENROLLING_USER = "daon_enrolling_user";
+
+        /**
+         * The user's own tenant, which the association is keyed on — in a B2B login not the context's, and
+         * writing under one while reading under the other leaves the account permanently not-enrolled.
+         */
+        public static final String ENROLLING_USER_TENANT = "daon_enrolling_user_tenant";
+    }
 
     /**
-     * The user's own tenant, which the association is keyed on — in a B2B login not the context's, and
-     * writing under one while reading under the other leaves the account permanently not-enrolled.
+     * Names the connector's diagnostic logs are published under.
      */
-    public static final String DAON_ENROLLING_USER_TENANT = "daon_enrolling_user_tenant";
+    public static class LogConstants {
 
-    /*
-     * Flow-context keys carrying the association from DaonExecutor to DaonFederatedAssociationListener.
+        private LogConstants() {
+        }
+
+        public static final String OUTBOUND_AUTH_DAON_SERVICE = "outbound-auth-daon";
+
+        /**
+         * Steps a diagnostic log is recorded against.
+         */
+        public static class ActionIDs {
+
+            private ActionIDs() {
+            }
+
+            public static final String POPULATE_VERIFIED_CLAIMS = "populate-daon-verified-user-claims";
+            public static final String BIND_VERIFIED_IDENTITY = "bind-daon-verified-identity";
+        }
+    }
+
+    /**
+     * Flow types the executor runs in.
      */
-    public static final String DAON_FED_IDP_NAME = "daon_fed_idp_name";
-    public static final String DAON_FED_SUBJECT = "daon_fed_subject";
+    public static class FlowTypes {
 
-    public static final String FLOW_TYPE_PASSWORD_RECOVERY = "PASSWORD_RECOVERY";
-    public static final String FLOW_TYPE_REGISTRATION = "REGISTRATION";
-    public static final String FLOW_TYPE_INVITED_USER_REGISTRATION = "INVITED_USER_REGISTRATION";
+        private FlowTypes() {
+        }
 
-    public static final String WSO2_LASTNAME_CLAIM_URI = "http://wso2.org/claims/lastname";
-    public static final String WSO2_GIVENNAME_CLAIM_URI = "http://wso2.org/claims/givenname";
+        public static final String PASSWORD_RECOVERY = "PASSWORD_RECOVERY";
+        public static final String REGISTRATION = "REGISTRATION";
+        public static final String INVITED_USER_REGISTRATION = "INVITED_USER_REGISTRATION";
+    }
 }
