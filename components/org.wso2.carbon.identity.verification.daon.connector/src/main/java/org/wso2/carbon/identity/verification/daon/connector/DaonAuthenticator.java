@@ -224,7 +224,7 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_OIDC_CONFIG_NOT_RESOLVED, TOKEN));
             throw failCallback(context, ErrorMessage.ERROR_OIDC_CONFIG_NOT_RESOLVED);
         }
-        super.processAuthenticationResponse(request, response, context);
+        processAuthResponse(request, response, context);
         // The context outlives the request. Prevents a stale marker from skipping the identity binding check below.
         String enrollingUser = (String) context.getProperty(ENROLLING_USER);
         String enrollingUserTenant = (String) context.getProperty(ENROLLING_USER_TENANT);
@@ -238,6 +238,45 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             return;
         }
         assertVerifiedIdentityMatchesUser(context, expectedSubject);
+    }
+
+    @Override
+    protected String mapIdToken(AuthenticationContext context, HttpServletRequest request,
+                                OAuthClientResponse oAuthResponse) throws AuthenticationFailedException {
+
+        String idToken = super.mapIdToken(context, request, oAuthResponse);
+        if (StringUtils.isBlank(idToken)) {
+            LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_ID_TOKEN_NOT_FOUND, OPERATION_LOGIN));
+            throw failCallback(context, ErrorMessage.ERROR_ID_TOKEN_NOT_FOUND);
+        }
+        String preferredUsername;
+        try {
+            preferredUsername = DaonJwtUtil.decodeJwtPayload(idToken)
+                    .optString(DaonConstants.IdTokenClaims.PREFERRED_USERNAME, null);
+        } catch (DaonServerException e) {
+            // Preserves whether the token was malformed or merely undecodable; both are operator-actionable.
+            LOG.error(e.getErrorCode() + " - " + e.getMessage(), e);
+            context.setProperty(FrameworkConstants.AUTH_ERROR_CODE, e.getErrorCode());
+            context.setProperty(FrameworkConstants.AUTH_ERROR_MSG, e.getMessage());
+            throw new AuthenticationFailedException(e.getErrorCode(), e.getMessage(), e);
+        }
+        if (StringUtils.isBlank(preferredUsername)) {
+            LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN,
+                    OPERATION_LOGIN));
+            throw failCallback(context, ErrorMessage.ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN);
+        }
+        return idToken;
+    }
+
+    /*
+     * The parent's token exchange, behind an overridable seam. It cannot run in a unit test: its claim
+     * parsing reaches OIDCCommonUtil.parseIDToken(), which needs a nimbus-jose-jwt build the connector
+     * does not resolve off-container.
+     */
+    protected void processAuthResponse(HttpServletRequest request, HttpServletResponse response,
+                                       AuthenticationContext context) throws AuthenticationFailedException {
+
+        super.processAuthenticationResponse(request, response, context);
     }
 
     private void persistEnrolment(AuthenticationContext context, String qualifiedUsername,
@@ -343,11 +382,12 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
     protected String getAuthenticateUser(AuthenticationContext context, Map<String, Object> oidcClaims,
                                          OAuthClientResponse oidcResponse) {
 
-        Object preferredUsername = oidcClaims.get(DaonConstants.IdTokenClaims.PREFERRED_USERNAME);
-        if (preferredUsername != null && StringUtils.isNotBlank(preferredUsername.toString())) {
-            return preferredUsername.toString();
+        Object preferredUsername = oidcClaims == null
+                ? null : oidcClaims.get(DaonConstants.IdTokenClaims.PREFERRED_USERNAME);
+        if (preferredUsername == null || StringUtils.isBlank(preferredUsername.toString())) {
+            return null;
         }
-        return super.getAuthenticateUser(context, oidcClaims, oidcResponse);
+        return preferredUsername.toString();
     }
 
     @Override

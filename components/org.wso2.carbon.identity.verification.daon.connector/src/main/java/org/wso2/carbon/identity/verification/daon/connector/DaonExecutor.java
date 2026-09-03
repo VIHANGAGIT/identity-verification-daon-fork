@@ -357,7 +357,8 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                 idTokenPayload.optString(DaonConstants.IdTokenClaims.PREFERRED_USERNAME, null);
         if (StringUtils.isBlank(returnedPreferredUsername)) {
             throw DaonExceptionMgt.handleFlowServerException(
-                    ErrorMessage.ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN);
+                    ErrorMessage.ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN,
+                    flowExecutionContext.getFlowType());
         }
 
         String expectedSubject = flowExecutionContext.getAuthenticatorProperties()
