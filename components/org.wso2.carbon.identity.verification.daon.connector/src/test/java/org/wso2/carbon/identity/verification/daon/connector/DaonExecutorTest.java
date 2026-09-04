@@ -59,13 +59,13 @@ import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertNull;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
+import static org.wso2.carbon.identity.flow.mgt.Constants.FlowTypes.INVITED_USER_REGISTRATION;
+import static org.wso2.carbon.identity.flow.mgt.Constants.FlowTypes.PASSWORD_RECOVERY;
+import static org.wso2.carbon.identity.flow.mgt.Constants.FlowTypes.REGISTRATION;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ClaimsRequest.TRUST_FRAMEWORK;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ClaimsRequest.TRUST_FRAMEWORK_VALUE;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.ENROL_PD;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.LOGIN_PD;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.INVITED_USER_REGISTRATION;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.PASSWORD_RECOVERY;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.REGISTRATION;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.IdTokenClaims.CLAIMS_OBJECT;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.IdTokenClaims.PREFERRED_USERNAME;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.IdTokenClaims.SUBJECT;
@@ -151,14 +151,12 @@ public class DaonExecutorTest {
                 DaonConstants.LogConstants.OUTBOUND_AUTH_DAON_SERVICE);
     }
 
-    /*
-     * Daon verification is offered on registration, invited-user registration and password recovery alike,
-     * so the executor opts into every flow type the engine knows.
-     */
+    // A later flow type must be opted in.
     @Test
-    public void testEveryFlowTypeIsSupported() {
+    public void testFlowTypesAreSupported() {
 
-        assertEquals(executor.getSupportedFlowTypes(), EnumSet.allOf(FlowTypes.class));
+        assertEquals(executor.getSupportedFlowTypes(),
+                EnumSet.of(REGISTRATION, PASSWORD_RECOVERY, INVITED_USER_REGISTRATION));
     }
 
     @Test
@@ -294,7 +292,7 @@ public class DaonExecutorTest {
 
         ExecutorResponse response = executor.execute(context);
 
-        assertEquals(response.getResult(), Constants.ExecutorStatus.STATUS_ERROR);
+        assertEquals(response.getResult(), Constants.ExecutorStatus.STATUS_USER_ERROR);
         assertEquals(response.getErrorCode(), "DAON-65023");
         assertNull(requestProperties(context).get(SELECTED_PD));
     }
@@ -311,7 +309,7 @@ public class DaonExecutorTest {
 
         ExecutorResponse response = executor.execute(context);
 
-        assertEquals(response.getResult(), Constants.ExecutorStatus.STATUS_ERROR);
+        assertEquals(response.getResult(), Constants.ExecutorStatus.STATUS_USER_ERROR);
         assertEquals(response.getErrorCode(), "DAON-65023");
     }
 
@@ -751,11 +749,11 @@ public class DaonExecutorTest {
         return inputs;
     }
 
-    private FlowExecutionContext flowContext(String flowType) {
+    private FlowExecutionContext flowContext(FlowTypes flowType) {
 
         FlowExecutionContext context = new FlowExecutionContext();
         context.setTenantDomain(TENANT_DOMAIN);
-        context.setFlowType(flowType);
+        context.setFlowType(flowType.getType());
 
         Map<String, String> props = new HashMap<>();
         props.put(OIDCAuthenticatorConstants.CLIENT_ID, "daon-client");

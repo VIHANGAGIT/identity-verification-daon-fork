@@ -89,6 +89,8 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
      */
     private static final String QUERY_PARAM_SEPARATOR = "&";
     private static final String QUERY_PARAM_ASSIGNMENT = "=";
+    private static final String QUERY_PARAM_TEMPLATE = "${";
+    private static final String QUERY_PARAM_AUTH_TEMPLATE = "$authparam{";
 
     @Override
     public String getName() {
@@ -140,9 +142,14 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             failRequest(request, response, context, ErrorMessage.ERROR_USER_NOT_ENROLLED);
             return;
         }
+        String unsafeValue = addDaonQueryParams(props, props.get(LOGIN_PD), daonSubject, null);
+        if (unsafeValue != null) {
+            LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_UNSAFE_QUERY_PARAM_VALUE, unsafeValue));
+            failRequest(request, response, context, ErrorMessage.ERROR_UNSAFE_QUERY_PARAM_VALUE);
+            return;
+        }
         // Remember the identity this request is asking Daon to verify, so the callback can be bound to it.
         context.setProperty(EXPECTED_SUBJECT, daonSubject);
-        addDaonQueryParams(props, props.get(LOGIN_PD), daonSubject, null);
         super.initiateAuthenticationRequest(request, response, context);
     }
 
@@ -170,8 +177,8 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
                 resolveValueRequests(context, authenticatedUser, qualifiedUsername, claimMappings);
         if (!DaonClaimsRequestBuilder.hasDocumentVerifiableValue(valueRequests)) {
             // With no document-verifiable attribute we cannot bind an identity to this account.
-            LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_NO_VERIFIABLE_CLAIM_VALUES, OPERATION_ENROLMENT));
-            LOG.error("Daon enrolment could not be attempted: " + claimMappings.size() + " attribute "
+            LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_NO_VERIFIABLE_CLAIM_VALUES, OPERATION_ENROLMENT));
+            LOG.warn("Daon enrolment could not be attempted: " + claimMappings.size() + " attribute "
                     + "mapping(s) resolved (Daon claims: " + claimMappings.values() + "), of which "
                     + valueRequests.size() + " had a value on the user's profile (Daon claims: "
                     + valueRequests.keySet() + "). At least one of "
@@ -194,10 +201,15 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             LOG.debug("Enrolling a user with no Daon enrolment at the login step, using the enrol process "
                     + "definition: " + enrolProcessDefinition);
         }
+        String unsafeValue = addDaonQueryParams(props, enrolProcessDefinition, null, claimsRequest);
+        if (unsafeValue != null) {
+            LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_UNSAFE_QUERY_PARAM_VALUE, unsafeValue));
+            failRequest(request, response, context, ErrorMessage.ERROR_UNSAFE_QUERY_PARAM_VALUE);
+            return;
+        }
         context.setProperty(ENROLLING_USER, qualifiedUsername);
         context.setProperty(ENROLLING_USER_TENANT,
                 resolveUserTenantDomain(authenticatedUser, context));
-        addDaonQueryParams(props, enrolProcessDefinition, null, claimsRequest);
         super.initiateAuthenticationRequest(request, response, context);
     }
 
@@ -443,9 +455,18 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
         return props;
     }
 
-    private void addDaonQueryParams(Map<String, String> props, String processDefinition, String loginHint,
-                                    String claimsRequest) {
+    private String addDaonQueryParams(Map<String, String> props, String processDefinition, String loginHint,
+                                      String claimsRequest) {
 
+        if (isQueryUnsafe(processDefinition)) {
+            return "process definition";
+        }
+        if (isQueryUnsafe(loginHint)) {
+            return "Daon subject of the user being verified";
+        }
+        if (isQueryUnsafe(claimsRequest)) {
+            return "claims request";
+        }
         List<String> queryParams = new ArrayList<>();
         String configuredQueryParams = props.get(FrameworkConstants.QUERY_PARAMS);
         if (StringUtils.isNotBlank(configuredQueryParams)) {
@@ -461,6 +482,21 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
             queryParams.add(DaonConstants.OIDCParams.CLAIMS + QUERY_PARAM_ASSIGNMENT + claimsRequest);
         }
         props.put(FrameworkConstants.QUERY_PARAMS, String.join(QUERY_PARAM_SEPARATOR, queryParams));
+        return null;
+    }
+
+    /*
+     * Whether the value would break out of its query parameter.
+     */
+    private static boolean isQueryUnsafe(String value) {
+
+        if (StringUtils.isBlank(value)) {
+            return false;
+        }
+        return value.contains(QUERY_PARAM_SEPARATOR)
+                || value.contains(QUERY_PARAM_ASSIGNMENT)
+                || value.contains(QUERY_PARAM_TEMPLATE)
+                || value.contains(QUERY_PARAM_AUTH_TEMPLATE);
     }
 
     /*
@@ -517,8 +553,7 @@ public class DaonAuthenticator extends OpenIDConnectAuthenticator {
     private Map<String, String> removeQueryUnsafeValues(Map<String, String> valuesByDaonClaimName) {
 
         valuesByDaonClaimName.entrySet().removeIf(entry -> {
-            String value = entry.getValue();
-            if (!value.contains(QUERY_PARAM_SEPARATOR) && !value.contains(QUERY_PARAM_ASSIGNMENT)) {
+            if (!isQueryUnsafe(entry.getValue())) {
                 return false;
             }
             if (LOG.isDebugEnabled()) {

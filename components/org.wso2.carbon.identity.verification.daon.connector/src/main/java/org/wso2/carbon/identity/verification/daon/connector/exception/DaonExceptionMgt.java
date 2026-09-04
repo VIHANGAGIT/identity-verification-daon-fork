@@ -24,6 +24,8 @@ import org.wso2.carbon.identity.flow.execution.engine.exception.FlowEngineClient
 import org.wso2.carbon.identity.flow.execution.engine.exception.FlowEngineServerException;
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
 
+import java.util.IllegalFormatException;
+
 /**
  * Builds exceptions and log lines from the {@link ErrorMessage} catalogue, bridging it to the flow-engine,
  * authentication-framework and internal exception families.
@@ -35,10 +37,14 @@ public final class DaonExceptionMgt {
 
     private static String describe(ErrorMessage error, Object... data) {
 
-        if (ArrayUtils.isNotEmpty(data)) {
-            return String.format(error.getDescription(), data);
+        if (ArrayUtils.isEmpty(data)) {
+            return error.getDescription();
         }
-        return error.getDescription();
+        try {
+            return String.format(error.getDescription(), data);
+        } catch (IllegalFormatException e) {
+            return error.getDescription();
+        }
     }
 
     /**

@@ -25,6 +25,7 @@ import org.wso2.carbon.identity.flow.execution.engine.exception.FlowEngineServer
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants;
 import org.wso2.carbon.identity.verification.daon.connector.constants.DaonErrorConstants.ErrorMessage;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -114,6 +115,39 @@ public class DaonExceptionMgtTest {
 
         String log = DaonExceptionMgt.errorLog(ErrorMessage.ERROR_RESOLVING_REFERENCED_IDP);
         assertEquals(log, "DAON-65008 - " + ErrorMessage.ERROR_RESOLVING_REFERENCED_IDP.getDescription());
+    }
+
+    // Missing arguments must not mask the error.
+    @Test
+    public void testATemplateWithMorePlaceholdersThanArgumentsStillRenders() {
+
+        String log = DaonExceptionMgt.errorLog(ErrorMessage.ERROR_TRUST_FRAMEWORK_MISMATCH, "some-framework");
+        assertEquals(log, "DAON-65022 - " + ErrorMessage.ERROR_TRUST_FRAMEWORK_MISMATCH.getDescription());
+    }
+
+    // Guards every entry against a format error.
+    @Test
+    public void testEveryDescriptionRendersAtAnyArgumentCount() {
+
+        for (ErrorMessage error : ErrorMessage.values()) {
+            for (int argumentCount = 0; argumentCount <= 3; argumentCount++) {
+                Object[] arguments = new Object[argumentCount];
+                Arrays.fill(arguments, "x");
+                assertNotNull(DaonExceptionMgt.errorLog(error, arguments),
+                        error.name() + " does not render with " + argumentCount + " argument(s).");
+            }
+        }
+    }
+
+    // 65006 is raised from login and recovery.
+    @Test
+    public void testTheMissingIdentityDescriptionNamesTheFlowItWasRaisedFrom() {
+
+        assertTrue(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN, "login")
+                .contains("login"));
+        assertTrue(DaonExceptionMgt
+                .errorLog(ErrorMessage.ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN, "PASSWORD_RECOVERY")
+                .contains("PASSWORD_RECOVERY"));
     }
 
     @Test

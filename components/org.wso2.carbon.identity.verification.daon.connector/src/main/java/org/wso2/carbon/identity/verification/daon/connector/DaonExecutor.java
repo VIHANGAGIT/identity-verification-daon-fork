@@ -30,6 +30,7 @@ import org.wso2.carbon.identity.application.authenticator.oidc.OpenIDConnectExec
 import org.wso2.carbon.identity.central.log.mgt.utils.LogConstants;
 import org.wso2.carbon.identity.central.log.mgt.utils.LoggerUtils;
 import org.wso2.carbon.identity.flow.execution.engine.Constants;
+import org.wso2.carbon.identity.flow.execution.engine.exception.FlowEngineClientException;
 import org.wso2.carbon.identity.flow.execution.engine.exception.FlowEngineException;
 import org.wso2.carbon.identity.flow.execution.engine.metadata.FlowExecutorMetadata;
 import org.wso2.carbon.identity.flow.execution.engine.model.ExecutorResponse;
@@ -59,12 +60,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static org.wso2.carbon.identity.flow.mgt.Constants.FlowTypes.INVITED_USER_REGISTRATION;
+import static org.wso2.carbon.identity.flow.mgt.Constants.FlowTypes.PASSWORD_RECOVERY;
+import static org.wso2.carbon.identity.flow.mgt.Constants.FlowTypes.REGISTRATION;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.ENROL_PD;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.IDP_ID;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.ConnectionProperties.LOGIN_PD;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.INVITED_USER_REGISTRATION;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.PASSWORD_RECOVERY;
-import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.FlowTypes.REGISTRATION;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LocalClaims.FIRST_NAME_CLAIM;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LocalClaims.LAST_NAME_CLAIM;
 import static org.wso2.carbon.identity.verification.daon.connector.constants.DaonConstants.LogConstants.ActionIDs.BIND_VERIFIED_IDENTITY;
@@ -101,7 +102,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     @Override
     public Set<FlowTypes> getSupportedFlowTypes() {
 
-        return EnumSet.allOf(FlowTypes.class);
+        return EnumSet.of(REGISTRATION, PASSWORD_RECOVERY, INVITED_USER_REGISTRATION);
     }
 
     @Override
@@ -134,17 +135,19 @@ public class DaonExecutor extends OpenIDConnectExecutor {
 
         try {
             prepareRequest(flowExecutionContext);
+        } catch (FlowEngineClientException e) {
+            // Caused by how the connection is configured or by the user's own data, not by a server fault, so
+            // the flow fails as a client error. The throw site has already logged what an admin needs.
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(e.getErrorCode() + " - " + e.getDescription(), e);
+            }
+            return failedResponse(Constants.ExecutorStatus.STATUS_USER_ERROR, e);
         } catch (FlowEngineException e) {
             // The request cannot be built in a form that actually verifies the user.
             LOG.error(e.getErrorCode() + " - " + e.getDescription(), e);
-            ExecutorResponse errorResponse = new ExecutorResponse();
-            errorResponse.setResult(Constants.ExecutorStatus.STATUS_ERROR);
-            errorResponse.setErrorCode(e.getErrorCode());
-            errorResponse.setErrorMessage(e.getMessage());
-            errorResponse.setErrorDescription(e.getDescription());
-            return errorResponse;
+            return failedResponse(Constants.ExecutorStatus.STATUS_ERROR, e);
         }
-        if (PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType())
+        if (isFlowType(PASSWORD_RECOVERY, flowExecutionContext)
                 && StringUtils.isBlank(flowExecutionContext.getAuthenticatorProperties()
                         .get(DaonConstants.PropertyCarriers.LOGIN_HINT))) {
             if (LOG.isDebugEnabled()) {
@@ -154,6 +157,16 @@ public class DaonExecutor extends OpenIDConnectExecutor {
             return userError(ErrorMessage.ERROR_USER_NOT_ENROLLED);
         }
         return super.execute(flowExecutionContext);
+    }
+
+    private ExecutorResponse failedResponse(String status, FlowEngineException e) {
+
+        ExecutorResponse response = new ExecutorResponse();
+        response.setResult(status);
+        response.setErrorCode(e.getErrorCode());
+        response.setErrorMessage(e.getMessage());
+        response.setErrorDescription(e.getDescription());
+        return response;
     }
 
     private ExecutorResponse userError(ErrorMessage error) {
@@ -173,7 +186,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         Map<String, String> enriched =
                 DaonReferencedIdpUtil.buildEffectiveProperties(props, flowExecutionContext.getTenantDomain());
 
-        boolean isRecovery = PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType());
+        boolean isRecovery = isFlowType(PASSWORD_RECOVERY, flowExecutionContext);
         Map<String, String> claimMappings = getIdpClaimMappings(flowExecutionContext);
         if (!isRecovery) {
             Map<String, String> prefilledValues = claimMappings.isEmpty()
@@ -214,16 +227,15 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     private void assertProfileCanBeValidated(FlowExecutionContext flowExecutionContext,
                                              Map<String, String> prefilledValues) throws FlowEngineException {
 
-        if (!INVITED_USER_REGISTRATION.equals(flowExecutionContext.getFlowType())) {
+        if (!isFlowType(INVITED_USER_REGISTRATION, flowExecutionContext)) {
             return;
         }
         if (DaonClaimsRequestBuilder.hasDocumentVerifiableValue(prefilledValues)) {
             return;
         }
-        LOG.error(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_NO_VERIFIABLE_CLAIM_VALUES,
+        LOG.warn(DaonExceptionMgt.errorLog(ErrorMessage.ERROR_NO_VERIFIABLE_CLAIM_VALUES,
                 flowExecutionContext.getFlowType()));
-        throw DaonExceptionMgt.handleFlowServerException(ErrorMessage.ERROR_NO_VERIFIABLE_CLAIM_VALUES,
-                flowExecutionContext.getFlowType());
+        throw DaonExceptionMgt.handleFlowClientException(ErrorMessage.ERROR_NO_VERIFIABLE_CLAIM_VALUES);
     }
 
     @Override
@@ -250,7 +262,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
     protected Map<String, Object> resolveUserAttributes(FlowExecutionContext flowExecutionContext, String code)
             throws FlowEngineException {
 
-        if (PASSWORD_RECOVERY.equals(flowExecutionContext.getFlowType())) {
+        if (isFlowType(PASSWORD_RECOVERY, flowExecutionContext)) {
             return resolvePasswordRecoveryAttributes(flowExecutionContext, code);
         }
 
@@ -288,7 +300,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
 
         String preferredUsername = idTokenPayload.optString(DaonConstants.IdTokenClaims.PREFERRED_USERNAME, null);
 
-        if (REGISTRATION.equals(flowExecutionContext.getFlowType())) {
+        if (isFlowType(REGISTRATION, flowExecutionContext)) {
             userAttributes.putAll(buildProfileClaims(daonClaims, extractedClaims, reverseClaimMap));
         }
 
@@ -482,7 +494,7 @@ public class DaonExecutor extends OpenIDConnectExecutor {
                                                              Map<String, String> claimMappings) {
 
         Map<String, String> localValues;
-        if (INVITED_USER_REGISTRATION.equals(context.getFlowType())) {
+        if (isFlowType(INVITED_USER_REGISTRATION, context)) {
             localValues = resolveInvitedUserClaims(context, claimMappings.keySet());
         } else {
             localValues = new HashMap<>();
@@ -499,6 +511,11 @@ public class DaonExecutor extends OpenIDConnectExecutor {
         }
 
         return DaonClaimMappingUtil.toDaonClaimValues(claimMappings, localValues);
+    }
+
+    private static boolean isFlowType(FlowTypes flowType, FlowExecutionContext flowExecutionContext) {
+
+        return flowType.getType().equals(flowExecutionContext.getFlowType());
     }
 
     private Map<String, String> getIdpClaimMappings(FlowExecutionContext context) {

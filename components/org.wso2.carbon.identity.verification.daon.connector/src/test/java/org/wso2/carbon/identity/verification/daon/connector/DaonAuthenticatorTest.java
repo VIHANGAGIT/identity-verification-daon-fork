@@ -479,6 +479,97 @@ public class DaonAuthenticatorTest {
     }
 
     @Test
+    public void testEnrolmentDropsClaimValuesThatWouldInterpolateARequestParameter() throws Exception {
+
+        AuthenticationContext context = loginContext();
+        context.setExternalIdP(externalIdp(
+                ClaimMapping.build(FIRST_NAME_CLAIM, "given_name", null, true),
+                ClaimMapping.build(DOB_CLAIM_URI, "birthdate", null, true)));
+        context.setSubject(userWithClaims(FIRST_NAME_CLAIM, "${p}", DOB_CLAIM_URI, "1990-01-01"));
+        authenticator.runtimeParams.put(DaonConstants.RuntimeParams.ENROL, "true");
+        givenNoEnrolment();
+
+        authenticator.initiateAuthenticationRequest(request, response, context);
+
+        assertTrue(authenticator.oidcRequestInitiated);
+        assertEquals(requestedClaimValue(queryParams(context), "birthdate"), "1990-01-01");
+        assertNull(requestedClaimValue(queryParams(context), "given_name"),
+                "A value the parent would interpolate must not be sent as a value-request.");
+    }
+
+    @Test
+    public void testEnrolmentDropsClaimValuesThatWouldInterpolateAnAuthenticatorParameter() {
+
+        AuthenticationContext context = loginContext();
+        context.setSubject(userWithClaims(FIRST_NAME_CLAIM, "$authparam{p}"));
+        authenticator.runtimeParams.put(DaonConstants.RuntimeParams.ENROL, "true");
+        givenNoEnrolment();
+
+        assertRequestFailure(context, "DAON-65023");
+    }
+
+    /*
+     * The stored Daon subject reaches the query string uninspected.
+     */
+    @Test
+    public void testLoginRefusesADaonSubjectTheQueryStringCannotCarry() throws Exception {
+
+        AuthenticationContext context = loginContext();
+        givenEnrolment("victim&acr_values=WeakProcess:1");
+
+        authenticator.initiateAuthenticationRequest(request, response, context);
+
+        assertEquals(context.getProperty(FrameworkConstants.AUTH_ERROR_CODE), "DAON-65029");
+        assertFalse(authenticator.oidcRequestInitiated);
+        assertNull(context.getProperty(EXPECTED_SUBJECT),
+                "A refused request must not leave the identity it never asked about on the context.");
+    }
+
+    @Test
+    public void testLoginRefusesADaonSubjectThatWouldInterpolateARequestParameter() throws Exception {
+
+        AuthenticationContext context = loginContext();
+        givenEnrolment("${p}");
+
+        authenticator.initiateAuthenticationRequest(request, response, context);
+
+        assertEquals(context.getProperty(FrameworkConstants.AUTH_ERROR_CODE), "DAON-65029");
+        assertFalse(authenticator.oidcRequestInitiated);
+    }
+
+    /*
+     * Dropping acr_values would fall back to Daon's default process.
+     */
+    @Test
+    public void testLoginRefusesAProcessDefinitionTheQueryStringCannotCarry() throws Exception {
+
+        AuthenticationContext context = loginContext();
+        context.getAuthenticatorProperties().put(LOGIN_PD, "LoginProcess:2.0&scope=openid");
+        givenEnrolment(DAON_SUBJECT);
+
+        authenticator.initiateAuthenticationRequest(request, response, context);
+
+        assertEquals(context.getProperty(FrameworkConstants.AUTH_ERROR_CODE), "DAON-65029");
+        assertFalse(authenticator.oidcRequestInitiated);
+    }
+
+    /*
+     * A stale marker would skip the callback's identity check.
+     */
+    @Test
+    public void testARefusedEnrolmentLeavesNoMarkerOnTheContext() {
+
+        AuthenticationContext context = loginContext();
+        context.getAuthenticatorProperties().put(ENROL_PD, "EnrolProcess:1&scope=openid");
+        authenticator.runtimeParams.put(DaonConstants.RuntimeParams.ENROL, "true");
+        givenNoEnrolment();
+
+        assertRequestFailure(context, "DAON-65029");
+        assertNull(context.getProperty(ENROLLING_USER));
+        assertNull(context.getProperty(ENROLLING_USER_TENANT));
+    }
+
+    @Test
     public void testALoginFailureSendsTheUserToTheRetryPage() throws Exception {
 
         AuthenticationContext context = loginContext();

@@ -118,7 +118,7 @@ public final class DaonErrorConstants {
         ERROR_NO_SUBJECT_IDENTITY_IN_ID_TOKEN("65006",
                 "No subject identity found in the Daon ID token.",
                 "The 'preferred_username' claim is not present in the Daon ID token returned for "
-                        + "password recovery."),
+                        + "the %s flow."),
 
         ERROR_IDP_MANAGER_UNAVAILABLE("65007",
                 "The identity provider management service is unavailable.",
@@ -206,7 +206,13 @@ public final class DaonErrorConstants {
                 "Could not resolve the user's userstore domain.",
                 "Error resolving the userstore domain of the flow user by user id; the Daon association "
                         + "will be keyed on the unqualified username, which resolves to the primary "
-                        + "userstore.");
+                        + "userstore."),
+
+        ERROR_UNSAFE_QUERY_PARAM_VALUE("65029",
+                "The Daon verification request could not be built safely.",
+                "The %s carries a character sequence the authorization request's additional query "
+                        + "parameters cannot carry verbatim. Sending it would let it alter the other "
+                        + "parameters of the request, so the request is refused rather than built.");
 
         private final String code;
         private final String message;

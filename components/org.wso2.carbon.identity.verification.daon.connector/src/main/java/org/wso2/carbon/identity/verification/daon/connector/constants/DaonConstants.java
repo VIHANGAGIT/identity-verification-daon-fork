@@ -194,17 +194,4 @@ public final class DaonConstants {
             public static final String BIND_VERIFIED_IDENTITY = "bind-daon-verified-identity";
         }
     }
-
-    /**
-     * Flow types the executor runs in.
-     */
-    public static class FlowTypes {
-
-        private FlowTypes() {
-        }
-
-        public static final String PASSWORD_RECOVERY = "PASSWORD_RECOVERY";
-        public static final String REGISTRATION = "REGISTRATION";
-        public static final String INVITED_USER_REGISTRATION = "INVITED_USER_REGISTRATION";
-    }
 }
