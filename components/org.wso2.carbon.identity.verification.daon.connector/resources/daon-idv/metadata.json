@@ -205,7 +205,7 @@
                     },
                     {
                         "title": "Reference from a login authenticator",
-                        "content": "<p>Copy this connection's <strong>resource ID</strong> and provide it as the <strong>Daon TrustX Verifier ID</strong> when creating a <strong>Daon TrustX Authenticator</strong> connection. That authenticator supplies the login process definition and is what you add to login flows; multiple login connections can reference this same connection and share one enrolment.</p>"
+                        "content": "<p>Refer this connection when creating a <strong>Daon TrustX Authenticator</strong> connection. That authenticator supplies the login process definition and is what you add to login flows; multiple login connections can reference this same connection and share one enrolment.</p>"
                     }
                 ]
             },
