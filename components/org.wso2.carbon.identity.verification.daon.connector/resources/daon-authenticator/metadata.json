@@ -2,7 +2,7 @@
     "create": {
         "image": "assets/images/logos/daon.svg",
         "header": "Daon TrustX Authenticator",
-        "Subheading": "Login users with Daon TrustX identity verification.",
+        "Subheading": "Enable identity verification through Daon TrustX.",
         "documentation": "",
         "modal": {
             "form": {

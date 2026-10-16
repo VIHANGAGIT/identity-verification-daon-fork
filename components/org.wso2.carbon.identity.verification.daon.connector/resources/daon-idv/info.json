@@ -5,6 +5,6 @@
     "image": "assets/images/logos/daon.svg",
     "category": "DEFAULT",
     "displayOrder": 15,
-    "tags": [ "OIDC" ],
+    "tags": [ "OIDC", "Identity-Verification" ],
     "type": "identity-provider"
 }
